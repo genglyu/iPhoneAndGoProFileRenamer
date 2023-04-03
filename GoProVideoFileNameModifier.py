@@ -14,6 +14,45 @@ import datetime
 import shutil
 
 
+def makeGoproVideoFileName(convertedFileName):
+    # convertedFileName is in the format of Date_CameraID_CCCC_BB_Time_AA.MP4
+    # goproVideoFileName is in the format of AABBCCCC.MP4
+    
+    # check if the file name is in the format of Date_CameraID_CCCC_BB_Time_AA.MP4
+    # try split the file name into 6 parts.
+    try:
+        # get the file without extension
+        fileNameWithoutExtension = os.path.splitext(convertedFileName)[0]
+        # get the file extension
+        fileExtension = os.path.splitext(convertedFileName)[1]
+        
+        fileNameParts = re.split("_", fileNameWithoutExtension)
+        # check if the there are 6 parts
+        if len(fileNameParts) != 6:
+            print ("The file name " + convertedFileName + " is possibly not a processed file name.")
+            return convertedFileName
+        else:
+            goProStyleName = fileNameParts[5] + fileNameParts[3] + fileNameParts[2] + fileExtension
+            return goProStyleName
+    except:
+        print ("Something wrong while trying to convert the file name " + convertedFileName + " to Gopro style.")
+        return convertedFileName
+
+def resetVideoFileNameToOriginalNameInFolder(folderPath, fileExtension = ".MP4"):
+    # reset the video file name to the original name in the folder
+    # folderPath is the path of the folder
+    # fileExtension is the extension of the file, e.g. .MP4
+    # return nothing
+    # get the list of all files in the folder
+    fileList = getFileNameListByFileExtensionNotCaseSensitive(folderPath, fileExtension)
+    for fileName in fileList:
+        # check if the file has the right extension.
+        if os.path.splitext(fileName)[1].upper() == fileExtension.upper():
+            originalFileName = makeGoproVideoFileName(fileName)
+            print("Reset " + fileName + " to " + originalFileName)
+            os.rename(fileName, originalFileName)
+    print("The video file name in the folder " + folderPath + " is reset to the original name.")
+
 def makeNewFileNameWithReplacedCameraID(fileName, oldCameraID, newCameraID):
     # replace the old camera ID in the file name with the new camera ID
     # fileName is the name of the file, without extension

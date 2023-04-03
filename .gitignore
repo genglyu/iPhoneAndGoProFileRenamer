@@ -1,0 +1,9 @@
+*.MP4
+*.LRV
+*.THM
+
+*.mp4
+*.lvr
+*.thm
+
+./__pycache__/
