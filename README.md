@@ -10,14 +10,21 @@ Runing process.py would convert the file names from AABBCCCC.MP4 to Date_CameraI
 
 Usage:
 
+```Bash
 python process.py -i CameraID
+```
 
 Convert Gopro Style file name to the new format, and delete the LRV/THM files.
 
+```Bash
 python process.py -rc oldCameraID newCameraID
+```
+Rep
+lace the cameraID for converted file names.
 
-Replace the cameraID for converted file names.
 
+```Bash
 python process.py -reset
+```
 
 go back to goPro style file names.
