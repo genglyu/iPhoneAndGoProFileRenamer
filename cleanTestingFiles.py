@@ -2,20 +2,20 @@
 
 import os
 import os.path
-import GoProVideoFileNameModifier
 
+from FileUtility import *
 
 def deleteSmallFilesByExtension(folderPath, fileExtension, size):
     # Delete all files in the folder with the specified file extension.
     # folderPath is the path of the folder
     # fileExtension is the file extension
     # size is the size of the file in KB
-    fileNameList = GoProVideoFileNameModifier.getFileNameListByFileExtensionNotCaseSensitive(folderPath, fileExtension)
-    for fileName in fileNameList:
-        fileSize = os.path.getsize(fileName)
+    filePathList = getFilePathListByFileExtension(folderPath, fileExtension)
+    for filePath in filePathList:
+        fileSize = os.path.getsize(filePath)
         if fileSize < size * 1024:
-            print("Deleting " + fileName)
-            os.remove(fileName)
+            print("Deleting " + filePath)
+            os.remove(filePath)
 
 def main():
     # Delete all .MP4, .LRV, .THM files which are smaller than 10KB in the current folder.

@@ -1,9 +1,11 @@
-*.MP4
-*.LRV
-*.THM
+*.[Mm][Pp]4
+*.[Ll][Rr][Vv]
+*.[Tt][Hh][Mm]
+*.[Jj][Pp][Gg]
 
-*.mp4
-*.lvr
-*.thm
+# iPhone file extensions
+
+*.[Hh][Ee][Ii][Cc]
+*.[Mm][Oo][Vv]
 
 ./__pycache__/

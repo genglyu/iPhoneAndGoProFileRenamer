@@ -1,36 +1,53 @@
 import os
 import os.path
-import GoProVideoFileNameModifier
 import argparse
+
+from FileUtility import *
 
 # create an ArgumentParser object
 parser = argparse.ArgumentParser()
 # add an argument for the camera ID (-i or --camera-id)
-parser.add_argument('-i', '--camera-id', help='Set camera ID in file name, default is Gopro', default='Gopro')
-parser.add_argument('-rc', '--replace-camera-id', nargs=2, help='Replace cameraID in file name. Format: -rc oldCameraID newCameraID')
-parser.add_argument('-reset', '--reset-gopro', action='store_true', help='Reset the file names to Gopro file style')
+
+# parser.add_argument('--override-camera-type', help='Set the camera type brutally, ignoring other information', default = None)
+parser.add_argument('-oci','--override-camera-id', help='Set the camera ID brutally, ignoring other information', default = None)
+
+parser.add_argument('-ii','--set-iPhone-id', help='Set iPhone camera ID.', default = "iPhone13")
+parser.add_argument('-gi','--set-GoPro-id', help='Set GoPro camera ID.', default = "11Mini")
+
+parser.add_argument('-s','--source-folder', help='Set the source folder.', default = os.getcwd())
+parser.add_argument('-d','--destination-folder', help='Set the destination folder.', default = os.getcwd())
+
+parser.add_argument('-r','-recover','--recover-original-filenames', action='store_true', help='Reset the file names to original', default=False)
+
+parser.add_argument('-l','-list','--list-files', action='store_true', help='List the files in the folder', default=False)
+
+parser.add_argument('-p', '--process', action='store_true', help='Process the files in the folder', default=False)
 
 # parse the command-line arguments
 args = parser.parse_args()
-# get the camera ID as a string
-cameraID = args.camera_id
+# overrideCameraType = args.override_camera_type
+overrideCameraType = None
+overrideCameraID = args.override_camera_id
+goproCameraID = args.set_GoPro_id
+iphoneCameraID = args.set_iPhone_id
 
-if args.reset_gopro:
-    # reset the video file name to the original name in the folder
-    print("Start resetting the video file name to the original name in the folder.")
-    folderPath = os.getcwd()
-    GoProVideoFileNameModifier.resetVideoFileNameToOriginalNameInFolder(folderPath)
-elif args.replace_camera_id:
-    # replace the old camera ID in all file names in the current folder with the new camera ID
-    print("Start replacing the old camera ID in all file names in the current folder with the new camera ID.")
-    oldCameraID = args.replace_camera_id[0]
-    newCameraID = args.replace_camera_id[1]
-    GoProVideoFileNameModifier.replaceAllCameraIDInFileNameInCurrentFolder(oldCameraID, newCameraID)
-else:
-    # Rename MP4 files in the current folder
-    folderPath = os.getcwd()
-    fileExtension = ".MP4"
-    GoProVideoFileNameModifier.renameAllFilesInFolderFromGoProFormatToCustom(folderPath, fileExtension, cameraID)
-    # Remove all .THM and .LRV files in the current folder
-    GoProVideoFileNameModifier.deleteTrashFiles(folderPath)
+sourceFolder = args.source_folder
+destinationFolder = args.destination_folder
+
+if args.list_files:
+    checkFilesInFolder(sourceFolder, printDetailedList=True)
+
+if args.recover_original_filenames:
+    # reset the file name to the original name in the folder
+    print("Start recover the video filename to the original name from: /n"
+          + sourceFolder + "/n to: /n" + destinationFolder)
+    renameFilesInFolderToOriginalName(sourceFolder, destinationFolder)
+elif args.process:
+    deleteGoproTrashFiles(sourceFolder)
+    # rename the video file name to the formatted name in the folder
+    print("Start rename the video filename to the formatted name from: /n" 
+          + sourceFolder + "/n to: /n" + destinationFolder)
+    renameFilesInFolderToFormattedName(sourceFolder, destinationFolder, 
+                                       overrideCameraType, overrideCameraID, 
+                                       goproCameraID, iphoneCameraID)
     
