@@ -1,4 +1,4 @@
-# GoProFileProcessingScript
+# Video and image renaming script
 
 Need to move the script to the same folder with the files to work.
 Or use -s and -d to set the source/destination folders.
