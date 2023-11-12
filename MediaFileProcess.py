@@ -14,8 +14,8 @@ parser.add_argument('-oci','--override-camera-id', help='Set the camera ID bruta
 parser.add_argument('-ii','--set-iPhone-id', help='Set iPhone camera ID.', default = "iPhone13")
 parser.add_argument('-gi','--set-GoPro-id', help='Set GoPro camera ID.', default = "11Mini")
 
-parser.add_argument('-s','--source-folder', help='Set the source folder.', default = None)
-parser.add_argument('-d','--destination-folder', help='Set the destination folder.', default = None)
+parser.add_argument('-s','--source-folder', help='Set the source folder. If not set, the default is current folder', default = None)
+parser.add_argument('-d','--destination-folder', help='Set the destination folder. If not set, it will be the same with the source folder', default = None)
 
 parser.add_argument('-r','-recover','--recover-original-filenames', action='store_true', help='Reset the file names to original', default=False)
 
