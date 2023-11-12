@@ -168,8 +168,8 @@ def getFileInformation(
             fileInformation.cameraAndDataType = CameraAndDataType.GoProVideo
 
             fileInformation.codex = filenameWithoutExtension[0:2]
-            fileInformation.sequenceID = filenameWithoutExtension[2:6]
-            fileInformation.chapterID = filenameWithoutExtension[6:8]
+            fileInformation.sequenceID = filenameWithoutExtension[4:8]
+            fileInformation.chapterID = filenameWithoutExtension[2:4]
             fileInformation.cameraID = defaultGoproCameraID
         elif isGoProImageFile(filePath):
             # a GoPro image file name is in the format of GS_xxxx.JPG, GS_xxxx.PNG
@@ -738,5 +738,3 @@ def renameFilesInFolderToOriginalName(sourceFolder,
                     shutil.move(newFilePath, destinationFolder)
                 except:
                     print("Error while trying to move the file " + filePath + " to " + destinationFolder)
-
-
