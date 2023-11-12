@@ -46,6 +46,9 @@ goproUtilityFileExtensionList = [".THM", ".LRV"]
 iphoneVideoFileExtensionList = [".MOV"]
 iphoneImageFileExtensionList = [".HEIC", ".JPG"]
 
+cameraVideoFileExtensionList = [".MOV"]
+cameraImageFileExtensionList = [".HEIC", ".JPG"]
+
 # define the camera and data type GoPro video, GoPro image, iPhone video, iPhone image, 
 # and link them to abbreviations used in the file name. GV, GI, IV, II
 class CameraAndDataType(Enum):
@@ -55,12 +58,18 @@ class CameraAndDataType(Enum):
     GoProImage = 2
     iPhoneVideo = 3
     iPhoneImage = 4
+    CameraVideo = 5
+    CameraImage = 6
 CameraAndDataTypeAbbreviation = {
     CameraAndDataType.UNKNOWN: "XX",
     CameraAndDataType.GoProVideo: "GV",
     CameraAndDataType.GoProImage: "GI",
     CameraAndDataType.iPhoneVideo: "IV",
-    CameraAndDataType.iPhoneImage: "II"
+    CameraAndDataType.iPhoneImage: "II",
+
+    
+    CameraAndDataType.CameraVideo: "CV",
+    CameraAndDataType.CameraImage: "CI"
 }
 CameraAndDataTypeAbbreviationReverse = {
     "XX": CameraAndDataType.UNKNOWN,

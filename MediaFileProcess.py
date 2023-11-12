@@ -8,7 +8,7 @@ from FileUtility import *
 parser = argparse.ArgumentParser()
 # add an argument for the camera ID (-i or --camera-id)
 
-# parser.add_argument('--override-camera-type', help='Set the camera type brutally, ignoring other information', default = None)
+parser.add_argument('-oct','--override-camera-type', help='Set the camera type brutally, ignoring other information', default = None)
 parser.add_argument('-oci','--override-camera-id', help='Set the camera ID brutally, ignoring other information', default = None)
 
 parser.add_argument('-ii','--set-iPhone-id', help='Set iPhone camera ID.', default = "iPhone13")
@@ -25,8 +25,8 @@ parser.add_argument('-p', '--process', action='store_true', help='Process the fi
 
 # parse the command-line arguments
 args = parser.parse_args()
-# overrideCameraType = args.override_camera_type
-overrideCameraType = None
+overrideCameraType = args.override_camera_type
+
 overrideCameraID = args.override_camera_id
 goproCameraID = args.set_GoPro_id
 iphoneCameraID = args.set_iPhone_id
