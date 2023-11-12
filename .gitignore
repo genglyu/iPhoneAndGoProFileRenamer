@@ -8,4 +8,4 @@
 *.[Hh][Ee][Ii][Cc]
 *.[Mm][Oo][Vv]
 
-./__pycache__/
+./__pycache__/*
