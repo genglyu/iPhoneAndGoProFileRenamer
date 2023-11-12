@@ -8,4 +8,6 @@
 *.[Hh][Ee][Ii][Cc]
 *.[Mm][Oo][Vv]
 
-./__pycache__/*
+# Python cache files
+__pycache__/
+*.py[cod]

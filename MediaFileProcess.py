@@ -14,8 +14,8 @@ parser.add_argument('-oci','--override-camera-id', help='Set the camera ID bruta
 parser.add_argument('-ii','--set-iPhone-id', help='Set iPhone camera ID.', default = "iPhone13")
 parser.add_argument('-gi','--set-GoPro-id', help='Set GoPro camera ID.', default = "11Mini")
 
-parser.add_argument('-s','--source-folder', help='Set the source folder.', default = os.getcwd())
-parser.add_argument('-d','--destination-folder', help='Set the destination folder.', default = os.getcwd())
+parser.add_argument('-s','--source-folder', help='Set the source folder.', default = None)
+parser.add_argument('-d','--destination-folder', help='Set the destination folder.', default = None)
 
 parser.add_argument('-r','-recover','--recover-original-filenames', action='store_true', help='Reset the file names to original', default=False)
 
@@ -31,8 +31,17 @@ overrideCameraID = args.override_camera_id
 goproCameraID = args.set_GoPro_id
 iphoneCameraID = args.set_iPhone_id
 
-sourceFolder = args.source_folder
-destinationFolder = args.destination_folder
+sourceFolder = None
+destinationFolder = None
+
+if args.source_folder is None:
+    sourceFolder = os.getcwd()
+else:
+    sourceFolder = args.source_folder
+if args.destination_folder is None:
+    destinationFolder = sourceFolder
+else:
+    destinationFolder = args.destination_folder
 
 if args.list_files:
     checkFilesInFolder(sourceFolder, printDetailedList=True)
