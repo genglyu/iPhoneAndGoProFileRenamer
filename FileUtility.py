@@ -26,7 +26,7 @@
 # AA is the codex, CCCC is the sequence number, BB is the chapter number 
 # For iPhone video and images, BB and AA are not applicable, so they are set to be 00.
 
-DEBUG = True
+DEBUG = False
 
 from argparse import OPTIONAL
 import os
@@ -60,6 +60,7 @@ class CameraAndDataType(Enum):
     iPhoneImage = 4
     CameraVideo = 5
     CameraImage = 6
+
 CameraAndDataTypeAbbreviation = {
     CameraAndDataType.UNKNOWN: "XX",
     CameraAndDataType.GoProVideo: "GV",
