@@ -67,7 +67,7 @@ CameraAndDataTypeAbbreviation = {
     CameraAndDataType.iPhoneVideo: "IV",
     CameraAndDataType.iPhoneImage: "II",
 
-    
+    # The ones used for overriding CameraTypeAbbreviation
     CameraAndDataType.CameraVideo: "CV",
     CameraAndDataType.CameraImage: "CI"
 }
@@ -76,7 +76,11 @@ CameraAndDataTypeAbbreviationReverse = {
     "GV": CameraAndDataType.GoProVideo,
     "GI": CameraAndDataType.GoProImage,
     "IV": CameraAndDataType.iPhoneVideo,
-    "II": CameraAndDataType.iPhoneImage
+    "II": CameraAndDataType.iPhoneImage,
+
+    # The ones used for overriding CameraTypeAbbreviation
+    "CV": CameraAndDataType.CameraVideo,
+    "CI": CameraAndDataType.CameraImage
 }
 
 

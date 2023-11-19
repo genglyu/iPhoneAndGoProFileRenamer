@@ -8,8 +8,8 @@ from FileUtility import *
 parser = argparse.ArgumentParser()
 # add an argument for the camera ID (-i or --camera-id)
 
-parser.add_argument('-oct','--override-camera-type', help='Set the camera type brutally, ignoring other information', default = None)
-parser.add_argument('-oci','--override-camera-id', help='Set the camera ID brutally, ignoring other information', default = None)
+parser.add_argument('-oct','--override-camera-type', help='Set the camera type brutally, ignoring other information. \n Can only choose from CameraAndDataTypeAbbreviation values: XX, GV, GI, IV, II, CV, CI \n This is a dangerous action, be sure you know what you are doing.', default = None)
+parser.add_argument('-oci','--override-camera-id', help='Set the camera ID brutally, ignoring other information. \n This is a dangerous action, be sure you know what you are doing.', default = None)
 
 parser.add_argument('-ii','--set-iPhone-id', help='Set iPhone camera ID.', default = "iPhone13")
 parser.add_argument('-gi','--set-GoPro-id', help='Set GoPro camera ID.', default = "11Mini")
