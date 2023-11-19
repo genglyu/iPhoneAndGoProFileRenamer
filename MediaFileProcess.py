@@ -38,10 +38,15 @@ if args.source_folder is None:
     sourceFolder = os.getcwd()
 else:
     sourceFolder = args.source_folder
+
 if args.destination_folder is None:
     destinationFolder = sourceFolder
 else:
     destinationFolder = args.destination_folder
+
+print("Processing started...")
+print("Source folder: " + sourceFolder)
+print("Destination folder: " + destinationFolder)
 
 if args.list_files:
     checkFilesInFolder(sourceFolder, printDetailedList=True)
