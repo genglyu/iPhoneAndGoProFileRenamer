@@ -440,6 +440,77 @@ def isIphoneImageFile(filePath):
 
 
 # ==================== More general functions ====================
+def isThereSubFolder(folderPath):
+    '''check if there is any sub folder in the folder'''
+    for filename in os.listdir(folderPath):
+        if os.path.isdir(os.path.join(folderPath, filename)):
+            return True
+    return False
+
+def isAirdropSubFolder(folderPath):
+    '''check if the folder is an airdrop sub folder, which contains only one file sharing the same name (without extension) with the folder.'''
+    # check if the folder only contains one file
+    if len(os.listdir(folderPath)) == 1:
+        # check if the file name is the same with the folder name
+        if os.path.basename(folderPath) == os.path.splitext(os.listdir(folderPath)[0])[0]:
+            return True
+    return False
+
+def isThereAirdropSubFolder(folderPath):
+    '''check if there is any airdrop sub folder in the folder'''
+    for filename in os.listdir(folderPath):
+        if os.path.isdir(os.path.join(folderPath, filename)):
+            if isAirdropSubFolder(os.path.join(folderPath, filename)):
+                return True
+    return False
+
+def getSubFolderListAsAirdropSubFolderListAndOtherSubFolderList(folderPath):
+    '''get the sub folder list in the folder, and divide them into two lists, airdrop sub folders and other sub folders.'''
+    airdropSubFolderList = []
+    otherSubFolderList = []
+    for filename in os.listdir(folderPath):
+        if os.path.isdir(os.path.join(folderPath, filename)):
+            if isAirdropSubFolder(os.path.join(folderPath, filename)):
+                airdropSubFolderList.append(filename)
+            else:
+                otherSubFolderList.append(filename)
+    return airdropSubFolderList, otherSubFolderList
+
+def getSubFolderList(folderPath):
+    '''get the sub folder list in the folder.'''
+    subFolderList = []
+    for filename in os.listdir(folderPath):
+        if os.path.isdir(os.path.join(folderPath, filename)):
+            subFolderList.append(filename)
+    return subFolderList
+
+def mergeAirdropSubFolders(sourceFolderPath, destinationFolderPath = None):
+    '''Move the content of the airdrop subfolders of the source folder to the destination folder, and delete the sub folders.'''
+    destinationFolderPath = sourceFolderPath if destinationFolderPath is None else destinationFolderPath
+    # get the sub folder list
+    airdropSubFolderList, otherSubFolderList = getSubFolderListAsAirdropSubFolderListAndOtherSubFolderList(sourceFolderPath)
+    # move the content of the airdrop sub folder to the destination folder
+    for subFolderName in airdropSubFolderList:
+        subFolderPath = os.path.join(sourceFolderPath, subFolderName)
+        for filename in os.listdir(subFolderPath):
+            shutil.move(os.path.join(subFolderPath, filename), os.path.join(destinationFolderPath, filename))
+        # delete the sub folder
+        os.rmdir(subFolderPath)
+
+def mergeSubFolders(sourceFolderPath, destinationFolderPath = None):
+    '''Move the content of the subfolders of the source folder to the destination folder, and delete the sub folders.'''
+    destinationFolderPath = sourceFolderPath if destinationFolderPath is None else destinationFolderPath
+    # get the sub folder list
+    subFolderList = getSubFolderList(sourceFolderPath)
+    # move the content of the sub folder to the destination folder
+    for subFolderName in subFolderList:
+        subFolderPath = os.path.join(sourceFolderPath, subFolderName)
+        for filename in os.listdir(subFolderPath):
+            shutil.move(os.path.join(subFolderPath, filename), os.path.join(destinationFolderPath, filename))
+        # delete the sub folder
+        os.rmdir(subFolderPath)
+
+
 def getFilenameListExcludingFileExtension(folderPath, fileExtension, isCaseSensitive = False):
     ''' Get the file name list in the folder, excluding the file extension.'''
     filenameList = []
