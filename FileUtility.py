@@ -37,6 +37,8 @@ import datetime
 import shutil
 from enum import Enum
 
+# from moviepy.editor import VideoFileClip
+
 # the potential file extension for the video file
 goproVideoFileExtensionList = [".MP4"]
 goproImageFileExtensionList = [".JPG", ".PNG"]
@@ -117,8 +119,8 @@ class FileInformation:
     def __init__(self, filePath):
         self.filePath = filePath
         self.fileType = FileType.UNKNOWN
-        self.modifiedDate = "00000000"
-        self.modifiedTime = "000000"
+        self.capturedDate = "00000000"
+        self.capturedTime = "000000"
         self.cameraAndDataType = CameraAndDataType.UNKNOWN
         self.cameraID = "Camera"
         self.sequenceID = "0000"
@@ -127,8 +129,8 @@ class FileInformation:
     def __str__(self):
         return "File path: " + self.filePath + "\n" \
             + "File type: " + str(self.fileType) + "\n" \
-            + "Modified date: " + self.modifiedDate + "\n" \
-            + "Modified time: " + self.modifiedTime + "\n" \
+            + "Captured date: " + self.capturedDate + "\n" \
+            + "Captured time: " + self.capturedTime + "\n" \
             + "Camera and data type: " + str(self.cameraAndDataType) + "\n" \
             + "Camera ID: " + self.cameraID + "\n" \
             + "Sequence ID: " + self.sequenceID + "\n" \
@@ -149,7 +151,6 @@ def getFileInformation(
     filenameWithoutExtension = os.path.splitext(filenameWithExtension)[0]
 
     fileInformation.fileType = evaluateFileType(filePath)
-    fileInformation.modifiedDate, fileInformation.modifiedTime = getModifiedDateAndTime(filePath)
 
     if (fileInformation.fileType == FileType.UNKNOWN 
         or fileInformation.fileType == FileType.GOPRO_UTILITIES):
@@ -166,6 +167,12 @@ def getFileInformation(
         fileInformation.chapterID = filenameParts[5]
         fileInformation.codex = filenameParts[6]
     else:
+        # The captured date and time only need for generating formatted filename.
+        try:
+            fileInformation.capturedDate, fileInformation.capturedTime = getVideoCapturedDateAndTime(filePath)
+        except:
+            fileInformation.capturedDate, fileInformation.capturedTime = getModifiedDateAndTime(filePath)
+
         # need to find a way to figure out the cameraType and cameraID here
         # For instance, use the "where from" info for iPhone images
         if isGoProVideoFile(filePath):
@@ -246,6 +253,45 @@ def getModifiedDateAndTime(filePath):
     # print("The modified date of the file is: " + extractedTime)
     
     return extractedDate, extractedTime
+
+def getVideoCapturedDateAndTime(filePath):
+    '''Get the date and time when the video was created. 
+    return two strings in the format of YYYYMMDD, HHMMSS'''
+    # get video duration by seconds
+    videoClipDurationBySeconds = getVideoDurationBySeconds(filePath)
+    # get the modified time of the file in seconds since the epoch
+    fileModifiedTimeBySeconds = os.path.getmtime(filePath)
+    # convert the captured time to a datetime object
+    videoStartFilmingDateTime = datetime.datetime.fromtimestamp(fileModifiedTimeBySeconds - videoClipDurationBySeconds)
+
+    extractedDate = videoStartFilmingDateTime.strftime("%Y%m%d")
+    extractedTime = videoStartFilmingDateTime.strftime("%H%M%S")
+    return extractedDate, extractedTime
+
+
+import subprocess
+def getVideoDurationBySeconds(filePath):
+    '''Get the duration of the video in seconds'''
+    # get the duration of the video in seconds
+    result = subprocess.run(['ffprobe', 
+                             '-v', 
+                             'error', 
+                             '-show_entries', 
+                             'format=duration', 
+                             '-of', 
+                             'default=noprint_wrappers=1:nokey=1', 
+                             filePath], 
+                             stdout=subprocess.PIPE, 
+                             stderr=subprocess.STDOUT)
+    videoClipDurationBySeconds = float(result.stdout)
+    return videoClipDurationBySeconds
+
+# from moviepy.editor import VideoFileClip
+# def getVideoDurationBySeconds(filePath):
+#     '''Get the duration of the video in seconds'''
+#     videoClip = VideoFileClip(filePath)
+#     videoClipDurationBySeconds = videoClip.duration
+#     return videoClipDurationBySeconds
 
 # ==================== Functions to check the file and type ====================
 
@@ -579,7 +625,7 @@ def deleteGoproTrashFiles(folderPath):
 
 # ==================== Key functions ====================
 
-def getFormattedFilename(fileInformation, 
+def getFormattedFilename(fileInformation: FileInformation, 
                          overrideCameraTypeAbbreviation = None,
                          overrideCameraID = None):
     '''Get the formatted file name based on the file information'''
@@ -602,8 +648,8 @@ def getFormattedFilename(fileInformation,
             cameraID = fileInformation.cameraID
 
         fileExtension = os.path.splitext(fileInformation.filePath)[1]
-        formattedFilenameWithExtension = fileInformation.modifiedDate + "_" \
-            + fileInformation.modifiedTime + "_" \
+        formattedFilenameWithExtension = fileInformation.capturedDate + "_" \
+            + fileInformation.capturedTime + "_" \
             + cameraTypeAbbreviation + "_" \
             + cameraID + "_" \
             + fileInformation.sequenceID + "_" \
