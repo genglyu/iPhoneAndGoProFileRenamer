@@ -41,15 +41,15 @@ from enum import Enum
 
 # the potential file extension for the video file
 goproVideoFileExtensionList = [".MP4"]
-goproImageFileExtensionList = [".JPG", ".PNG"]
+goproImageFileExtensionList = [".JPG", "JPEG", ".PNG"]
 
 goproUtilityFileExtensionList = [".THM", ".LRV"]
 
-iphoneVideoFileExtensionList = [".MOV"]
-iphoneImageFileExtensionList = [".HEIC", ".JPG"]
+iphoneVideoFileExtensionList = [".MOV", ".MP4"]
+iphoneImageFileExtensionList = [".HEIC", ".JPG", ".PNG", ".JPEG"]
 
 cameraVideoFileExtensionList = [".MOV"]
-cameraImageFileExtensionList = [".HEIC", ".JPG"]
+cameraImageFileExtensionList = [".HEIC", ".JPG", ".PNG", ".JPEG"]
 
 # define the camera and data type GoPro video, GoPro image, iPhone video, iPhone image, 
 # and link them to abbreviations used in the file name. GV, GI, IV, II
