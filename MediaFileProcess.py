@@ -47,11 +47,13 @@ if args.list_files:
 if args.merge_airdrop_sub_folders:
     if isThereAirdropSubFolder(sourceFolder):
         print("Start merging the Airdrop subfolders in the folder: " + sourceFolder)
-        mergeAirdropSubFolders(sourceFolder)
+        mergeAirdropSubFolders(sourceFolder, destinationFolder)
+        sourceFolder = destinationFolder
 if args.merge_sub_folders:
     if isThereSubFolder(sourceFolder):
         print("Start merging all the subfolders in the folder: " + sourceFolder)
-        mergeSubFolders(sourceFolder)
+        mergeSubFolders(sourceFolder, destinationFolder)
+        sourceFolder = destinationFolder
 
 if args.recover_original_filenames:
     # reset the file name to the original name in the folder
