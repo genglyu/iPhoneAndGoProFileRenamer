@@ -7,12 +7,7 @@ from FileUtility import *
 # create an ArgumentParser object
 parser = argparse.ArgumentParser()
 # add an argument for the camera ID (-i or --camera-id)
-
-parser.add_argument('-oct','--override-camera-type', help='Set the camera type brutally, ignoring other information. \n Can only choose from CameraAndDataTypeAbbreviation values: XX, GV, GI, IV, II, CV, CI \n This is a dangerous action, be sure you know what you are doing.', default = None)
 parser.add_argument('-oci','--override-camera-id', help='Set the camera ID brutally, ignoring other information. \n This is a dangerous action, be sure you know what you are doing.', default = None)
-
-parser.add_argument('-ii','--set-iPhone-id', help='Set iPhone camera ID.', default = "iPhone13")
-parser.add_argument('-gi','--set-GoPro-id', help='Set GoPro camera ID.', default = "11Mini")
 
 parser.add_argument('-s','--source-folder', help='Set the source folder. If not set, the default is current folder', default = None)
 parser.add_argument('-d','--destination-folder', help='Set the destination folder. If not set, it will be the same with the source folder', default = None)
@@ -27,11 +22,7 @@ parser.add_argument('-m', '--merge-airdrop-sub-folders', action='store_true', he
 parser.add_argument("-mf", "--merge-sub-folders", action='store_true', help="Merge all the sub-folders in the folder", default=False)
 # parse the command-line arguments
 args = parser.parse_args()
-overrideCameraType = args.override_camera_type
-
 overrideCameraID = args.override_camera_id
-goproCameraID = args.set_GoPro_id
-iphoneCameraID = args.set_iPhone_id
 
 sourceFolder = None
 destinationFolder = None
@@ -64,15 +55,15 @@ if args.merge_sub_folders:
 
 if args.recover_original_filenames:
     # reset the file name to the original name in the folder
-    print("Start recover the video filename to the original name from: /n"
-          + sourceFolder + "/n to: /n" + destinationFolder)
-    renameFilesInFolderToOriginalName(sourceFolder, destinationFolder)
+    print("Start recover the video filename to the original name from: \n"
+          + sourceFolder + "\n to: \n" + destinationFolder)
+    restoreOriginalFilenamesInFolder(sourceFolder, destinationFolder)
 elif args.process:
     deleteGoproTrashFiles(sourceFolder)
     # rename the video file name to the formatted name in the folder
-    print("Start rename the video filename to the formatted name from: /n" 
-          + sourceFolder + "/n to: /n" + destinationFolder)
-    renameFilesInFolderToFormattedName(sourceFolder, destinationFolder, 
-                                       overrideCameraType, overrideCameraID, 
-                                       goproCameraID, iphoneCameraID)
-    
+    print("Start rename the video filename to the formatted name from: \n" 
+          + sourceFolder + "\n to: \n" + destinationFolder)
+    renameMediaFilesInFolder(sourceFolder, 
+                             destinationFolder, 
+                             overrideCameraID, 
+                             defaultCameraID="Cid")    

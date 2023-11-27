@@ -2,31 +2,23 @@
 # most of the functions are used to recognize the file name format
 # and extract the data not shown in file names.
 
-# GoPro video file name is in the format of AABBCCCC.MP4
+# GoPro video file name is in the format of CCPPSSSS.MP4
 
-# AA is the codex of the video, usually GX or GP.
-# BB is the chapter number, usually 01, possibly 02, 03 or further.
-# CCCC is the sequence number, usually 0001, 0002, 0003 or further.
+# CC is the codex of the video, usually GX or GP.
+# PP is the chapter number, usually 01, possibly 02, 03 or further.
+# SSSS is the sequence number, usually 0001, 0002, 0003 or further.
 
-# the iPhone video file name is in the format of IMG_CCCC.MOV
-# XXXX is the sequence number, usually 0001, 0002, 0003 or further.
+# the iPhone video file name is in the format of IMG_SSSS.MOV
+# SSSS is the sequence number, usually 0001, 0002, 0003 or further.
 
-# The iPhone image file name is in the format of IMG_XXXX.HEIC or IMG_XXXX.JPG
-# XXXX is the sequence number, usually 0001, 0002, 0003 or further.
+# The iPhone image file name is in the format of IMG_SSSS.HEIC or IMG_SSSS.JPG
+# SSSS is the sequence number, usually 0001, 0002, 0003 or further.
 
 # The targeted file name format is 
-# YYYYMMDD_HHMMSS_XY_DDDDD_CCCC_BB_AA.*
-# Date_Time_CameraAndDataType_CameraID_SequenceID_ChapterID_Codex.*,
+# YYYYMMDD_HHMMSSTT_IIIII_NN_OriginalFilename.*
+# Date_Time_CameraAndDataType_CameraID_UniqueID_OriginalFilename.*
 
-# in which Date is the date of the video, 
-# Time is the time of the video.
-# When the chapter number BB is not 01, which is the case for the GoPro video, 
-# the "Time" is going to be set to the same with the chapter 01.
-
-# AA is the codex, CCCC is the sequence number, BB is the chapter number 
-# For iPhone video and images, BB and AA are not applicable, so they are set to be 00.
-
-DEBUG = False
+DEBUG = True
 
 from argparse import OPTIONAL
 import os
@@ -36,208 +28,113 @@ import re
 import datetime
 import shutil
 from enum import Enum
+import re
+import subprocess
+import json
 
-# from moviepy.editor import VideoFileClip
+# check if ffmpeg is installed and can be used through the subprocess module
+isFFmpegInstalled = False
+isMoviepyInstalled = False
+try:
+    cmd = ['ffmpeg', '-version']
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    # Check for errors
+    if result.returncode != 0:
+        print(f"Error running ffmpeg: {result.stderr}")
+    else:
+        isFFmpegInstalled = True
+except Exception as e:
+    print(f"Error: {e}")
+    isFFmpegInstalled = False
+# try to import moviepy, if failed, give a warning
+if isFFmpegInstalled:
+    try:
+        from moviepy.editor import VideoFileClip
+        isMoviepyInstalled = True
+    except Exception as e:
+        print(f"Error: {e}")
+        isMoviepyInstalled = False
+        print("Warning: moviepy is not installed. The video duration will be calculated by ffmpeg, which is not very efficient.")
+
+# ==================== The modules are prepared ====================
 
 # the potential file extension for the video file
-goproVideoFileExtensionList = [".MP4"]
-goproImageFileExtensionList = [".JPG", "JPEG", ".PNG"]
+videoFileExtensionList = [".MP4", ".MOV", ".MPG", ".MPEG", ".AVI", ".WMV", ".FLV", ".F4V", ".SWF", ".MKV", ".WEBM", ".HTML5"]
+imageFileExtensionList = [".JPG", ".JPEG", ".PNG", ".HEIC", ".GIF", ".BMP", ".TIFF", ".TIF", ".ICO", ".CUR", ".ANI", ".WEBP"]
+# the files might appear in the camera folder, but are not useful. Like the thumbnails, or the system files.
+uselessFileExtensionList = [".THM", ".LRV" # GoPro utility files
+                            # might add more in the future
+                            ]
+class FilenameType(Enum):
+    '''The filename patterns for filenames without extensions'''
 
-goproUtilityFileExtensionList = [".THM", ".LRV"]
+    Unknown = 0 # the file name is not recognized
 
-iphoneVideoFileExtensionList = [".MOV", ".MP4"]
-iphoneImageFileExtensionList = [".HEIC", ".JPG", ".PNG", ".JPEG"]
+    GxPPSSSS = 1 # Gopro video files: GX010001.mp4, 
+                # x -> Codex, usually "H" or "X", respectively for AVC, HEVC
+                # PP -> chapter number, 2 digits, from 01 to 99
+                # SSSS -> sequence number, 4 digits, from 0001 to 9999
+    
+    IMG_SSSS = 2 # iPhone images & videos, & Canon camera images, 
+                    # SSSS -> file id, 4 digits, from 0001 to 9999
+    MVI_SSSS = 3 # Canon camera video, 
+                    # SSSS -> file id, 4 digits, from 0001 to 9999
+    DSCFSSSS = 4 # Fuji camera images & videos, 
+                    # SSSS -> file id, 4 digits, from 0001 to 9999
+    
 
-cameraVideoFileExtensionList = [".MOV"]
-cameraImageFileExtensionList = [".HEIC", ".JPG", ".PNG", ".JPEG"]
+    FormattedV1 = 101 # YYYYMMDD_IIIII_SSSS_PP_HHMMSS_CC, in which
+                        # YYYYMMDD -> date, 8 digits, YYYY -> year (0000 to 9999), MM -> month (01 to 12), DD -> day (01 to 31), 
+                        # IIIII -> cameraID, string of any length, might contain letters and digits, uppercase and lowercase can be mixed.
+                        # SSSS -> sequence number, 4 digits, from 0001 to 9999
+                        # PP -> chapter number, 2 digits, from 00 to 99
+                        # HHMMSS -> time, 6 digits, HH -> hour (00 to 23), MM -> minute (00 to 59), SS -> second (00 to 59)
+                        # CC -> the codex, 2 captial letters, "GX" or "GH".
+    
+    FormattedV2 = 102 # YYYYMMDD_HHMMSS_XY_IIIII_SSSS_PP_CC, in which
+                        # YYYYMMDD -> date, 8 digits, YYYY -> year (0000 to 9999), MM -> month (01 to 12), DD -> day (01 to 31),
+                        # HHMMSSTT -> time, 8 digits, HH -> hour (00 to 23), MM -> minute (00 to 59), SS -> second (00 to 59), TT -> millisecond (00 to 99)
+                        # XY -> camera and data type, 2 letters, "GV" for GoPro video, "GI" for GoPro image, "IV" for iPhone video, "II" for iPhone image, "CV" for camera video, "CI" for camera image.
+                        # IIIII -> cameraID, string of any length, might contain letters and digits, uppercase and lowercase can be mixed.
+                        # SSSS -> sequence number, 4 digits, from 0001 to 9999
+                        # PP -> chapter number, 2 digits, from 00 to 99
+                        # CC -> the codex, 2 or 3 captial letters, "GX" or "GH" for GoPro video, "GS" for GoPro image, "IMG" for iPhone video and image (might also be Canon images), "MVI" for Canon camera video, "DSCF" for Fuji camera video and image.
 
-# define the camera and data type GoPro video, GoPro image, iPhone video, iPhone image, 
-# and link them to abbreviations used in the file name. GV, GI, IV, II
-class CameraAndDataType(Enum):
-    '''the camera and data type GoPro video, GoPro image, iPhone video, iPhone image'''
-    UNKNOWN = 0
-    GoProVideo = 1
-    GoProImage = 2
-    iPhoneVideo = 3
-    iPhoneImage = 4
-    CameraVideo = 5
-    CameraImage = 6
+    FormattedV3 = 103 # YYYYMMDD_HHMMSSTT_IIIII(?:_NN)(OriginalFilenameWithoutExtension), in which
+                        # YYYYMMDD -> date, 8 digits, YYYY -> year (0000 to 9999), MM -> month (01 to 12), DD -> day (01 to 31)，
+                        # HHMMSSTT -> time, 8 digits, HH -> hour (00 to 23), MM -> minute (00 to 59), SS -> second (00 to 59), TT -> time less than one second，
+                        # IIIII -> cameraID, string of any length, might contain letters and digits, uppercase and lowercase can be mixed
+                        # NN -> unique ID, 2 digits, from 01 to 99, used to distinguish files with the same date and time，
+                        # OriginalFilename -> the original file name, string of any length.
 
-CameraAndDataTypeAbbreviation = {
-    CameraAndDataType.UNKNOWN: "XX",
-    CameraAndDataType.GoProVideo: "GV",
-    CameraAndDataType.GoProImage: "GI",
-    CameraAndDataType.iPhoneVideo: "IV",
-    CameraAndDataType.iPhoneImage: "II",
+FilenamePattern = {
+    FilenameType.GxPPSSSS: r'^G(H|X)\d{4}$',
+    FilenameType.IMG_SSSS: r'^IMG_\d{4}$',
+    FilenameType.MVI_SSSS: r'^MVI_\d{4}$',
+    FilenameType.DSCFSSSS: r'^DSCF\d{4}$',
 
-    # The ones used for overriding CameraTypeAbbreviation
-    CameraAndDataType.CameraVideo: "CV",
-    CameraAndDataType.CameraImage: "CI"
+    FilenameType.FormattedV1: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([a-zA-Z0-9]+)_\d{4}_([0-9]{2})_([0-1][0-9]|2[0-3])([0-5][09])([0-5][0-9])_G(H|X)$',
+    FilenameType.FormattedV2: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])_([a-zA-Z]{2})_([a-zA-Z0-9]+)_\d{4}_([0-9]{2})_([0-1][0-9]|2[0-3])([0-5][09])([0-5][09])_(GX|GH|GS|IMG|MVI|DSCF)$',
+    # FilenameType.FormattedV3: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])([0-9]{2}})_([a-zA-Z0-9])+(?:_([0-9]{2}))\(([a-zA-Z0-9]+)\)$'
+    FilenameType.FormattedV3: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])([0-9]{2})_([a-zA-Z0-9]+)(_[0-9]{2})?\(([^\)]*)\)$'
+
 }
-CameraAndDataTypeAbbreviationReverse = {
-    "XX": CameraAndDataType.UNKNOWN,
-    "GV": CameraAndDataType.GoProVideo,
-    "GI": CameraAndDataType.GoProImage,
-    "IV": CameraAndDataType.iPhoneVideo,
-    "II": CameraAndDataType.iPhoneImage,
 
-    # The ones used for overriding CameraTypeAbbreviation
-    "CV": CameraAndDataType.CameraVideo,
-    "CI": CameraAndDataType.CameraImage
-}
+def validateString(pattern, testString):
+    result = re.match(pattern, testString)
+    return result is not None
 
-
-# define the codex for GoPro video and image, iPhone video and image
-goproVideoCodexList = ["GX", "GP"]
-# at this stage, there is no codex info for GoPro image, iPhone video and image.
-goproImageCodexList = ["GS"]
-iphoneVideoCodexList = ["IMG"]
-iphoneImageCodexList = ["IMG"]
-unknownCodexList = ["XX"]
-
-# define the file type
 class FileType(Enum):
-    UNKNOWN = 0
-    OldVersionProcessedGoProVideo = 1
-
-    GOPRO_VIDEO = 2
-    PROCESSED_GOPRO_VIDEO = 3
-
-    GOPRO_IMAGE = 4
-    PROCESSED_GOPRO_IMAGE = 5
-
-    GOPRO_UTILITIES = 6
-
-    IPHONE_VIDEO = 7
-    PROCESSED_IPHONE_VIDEO = 8
-
-    IPHONE_IMAGE = 9
-    PROCESSED_IPHONE_IMAGE = 10
-
-class FileInformation:
-    '''The file information class'''
-    def __init__(self, filePath):
-        self.filePath = filePath
-        self.fileType = FileType.UNKNOWN
-        self.capturedDate = "00000000"
-        self.capturedTime = "000000"
-        self.cameraAndDataType = CameraAndDataType.UNKNOWN
-        self.cameraID = "Camera"
-        self.sequenceID = "0000"
-        self.chapterID = "00"
-        self.codex = "XX"
-    def __str__(self):
-        return "File path: " + self.filePath + "\n" \
-            + "File type: " + str(self.fileType) + "\n" \
-            + "Captured date: " + self.capturedDate + "\n" \
-            + "Captured time: " + self.capturedTime + "\n" \
-            + "Camera and data type: " + str(self.cameraAndDataType) + "\n" \
-            + "Camera ID: " + self.cameraID + "\n" \
-            + "Sequence ID: " + self.sequenceID + "\n" \
-            + "Chapter ID: " + self.chapterID + "\n" \
-            + "Codex: " + self.codex + "\n"
+    '''the data type video, image'''
+    Unknown = 0
+    Video = 1
+    Image = 2
+    KnownButUseless = 3
 
 # ==================== Functions to get the file information ====================
-
-def getFileInformation(
-        filePath,
-        defaultGoproCameraID: str = "11Mini", 
-        defaultIphoneCameraID: str = "iPhone13") -> FileInformation:
-    '''Get file information. Return a FileInformation object.
-    if overrideCameraID is not set, other informaiton will be ignored.'''
-    fileInformation = FileInformation(filePath)
-
-    filenameWithExtension = os.path.basename(filePath)
-    filenameWithoutExtension = os.path.splitext(filenameWithExtension)[0]
-
-    fileInformation.fileType = evaluateFileType(filePath)
-
-    if (fileInformation.fileType == FileType.UNKNOWN 
-        or fileInformation.fileType == FileType.GOPRO_UTILITIES):
-        return fileInformation
-
-    if isFileProcessed(filePath):
-        # a processed file name is in the format of
-        # YYYYMMDD_HHMMSS_XY_DDDDD_CCCC_BB_AA.*
-        # Date_Time_CameraAndDataType_CameraID_SequenceID_ChapterID_Codex.*
-        filenameParts = re.split("_", filenameWithoutExtension)
-        fileInformation.cameraAndDataType = CameraAndDataTypeAbbreviationReverse[filenameParts[2]]
-        fileInformation.cameraID = filenameParts[3]
-        fileInformation.sequenceID = filenameParts[4]
-        fileInformation.chapterID = filenameParts[5]
-        fileInformation.codex = filenameParts[6]
-    else:
-        # The captured date and time only need for generating formatted filename.
-        try:
-            fileInformation.capturedDate, fileInformation.capturedTime = getVideoCapturedDateAndTime(filePath)
-        except:
-            fileInformation.capturedDate, fileInformation.capturedTime = getModifiedDateAndTime(filePath)
-
-        # need to find a way to figure out the cameraType and cameraID here
-        # For instance, use the "where from" info for iPhone images
-        if isGoProVideoFile(filePath):
-            # a GoPro video file name is in the format of AABBCCCC.MP4
-            fileInformation.cameraAndDataType = CameraAndDataType.GoProVideo
-
-            fileInformation.codex = filenameWithoutExtension[0:2]
-            fileInformation.sequenceID = filenameWithoutExtension[4:8]
-            fileInformation.chapterID = filenameWithoutExtension[2:4]
-            fileInformation.cameraID = defaultGoproCameraID
-        elif isGoProImageFile(filePath):
-            # a GoPro image file name is in the format of GS_xxxx.JPG, GS_xxxx.PNG
-            fileInformation.cameraAndDataType = CameraAndDataType.GoProImage
-            fileInformation.codex = filenameWithoutExtension[0:2]
-            fileInformation.sequenceID = filenameWithoutExtension[3:7]
-            fileInformation.cameraID = defaultGoproCameraID
-        elif isIphoneVideoFile(filePath):
-            # an iPhone video file name is in the format of IMG_xxxx.MOV
-            fileInformation.cameraAndDataType = CameraAndDataType.iPhoneVideo
-            fileInformation.codex = filenameWithoutExtension[0:3]
-            fileInformation.sequenceID = filenameWithoutExtension[4:8]
-            fileInformation.cameraID = defaultIphoneCameraID
-        elif isIphoneImageFile(filePath):
-            # an iPhone image file name is in the format of IMG_xxxx.JPG, IMG_xxxx.HEIC
-            fileInformation.cameraAndDataType = CameraAndDataType.iPhoneImage
-            fileInformation.codex = filenameWithoutExtension[0:3]
-            fileInformation.sequenceID = filenameWithoutExtension[4:8]
-            fileInformation.cameraID = defaultIphoneCameraID
-        else:
-            fileInformation.cameraAndDataType = CameraAndDataType.UNKNOWN
-    return fileInformation
-    
-def evaluateFileType(filePath):
-    '''evaluate the file type based on the file name and the file content'''
-    # The targeted file name format is 
-    # YYYYMMDD_HHMMSS_XY_DDDDD_CCCC_BB_AA.*
-    # Date_Time_CameraAndDataType_CameraID_SequenceID_ChapterID_Codex.*,
-    if isFileProcessed(filePath):
-        filenameWithExtension = os.path.basename(filePath)
-        filenameWithoutExtension = os.path.splitext(filenameWithExtension)[0]
-        filenameParts = re.split("_", filenameWithoutExtension)
-        if filenameParts[2] == CameraAndDataTypeAbbreviation[CameraAndDataType.GoProVideo]:
-            return FileType.PROCESSED_GOPRO_VIDEO
-        elif filenameParts[2] == CameraAndDataTypeAbbreviation[CameraAndDataType.GoProImage]:
-            return FileType.PROCESSED_GOPRO_IMAGE
-        elif filenameParts[2] == CameraAndDataTypeAbbreviation[CameraAndDataType.iPhoneVideo]:
-            return FileType.PROCESSED_IPHONE_VIDEO
-        elif filenameParts[2] == CameraAndDataTypeAbbreviation[CameraAndDataType.iPhoneImage]:
-            return FileType.PROCESSED_IPHONE_IMAGE
-    else:
-        if isGoProVideoFile(filePath):
-            return FileType.GOPRO_VIDEO
-        elif isGoProImageFile(filePath):
-            return FileType.GOPRO_IMAGE
-        elif isIphoneVideoFile(filePath):
-            return FileType.IPHONE_VIDEO
-        elif isIphoneImageFile(filePath):
-            return FileType.IPHONE_IMAGE
-        elif isGoProUtilityFile(filePath):
-            return FileType.GOPRO_UTILITIES
-        else:
-            return FileType.UNKNOWN
-
 def getModifiedDateAndTime(filePath):
-    '''Get the modified date and time of the file. return two strings in the format of YYYYMMDD, HHMMSS'''
+    '''Get the modified date and time of the file. 
+    Return two strings in the format of YYYYMMDD, HHMMSSTT'''
     # modifiedDate is the date of the file in the format of YYYYMMDD
     # modifiedTime is the time of the file in the format of HHMMSS
 
@@ -245,247 +142,119 @@ def getModifiedDateAndTime(filePath):
     fileModifiedTimeBySeconds = os.path.getmtime(filePath)
     # convert the modified time to a datetime object
     fileModifiedDateTime = datetime.datetime.fromtimestamp(fileModifiedTimeBySeconds)
+    # extract the date in the format of YYYYMMDD
     extractedDate = fileModifiedDateTime.strftime("%Y%m%d")
+    # extract the time in the format of HHMMSSTT
     extractedTime = fileModifiedDateTime.strftime("%H%M%S")
-    
-    # print("File name is: " + filePath)
-    # print("The modified time of the file is: " + extractedDate)
-    # print("The modified date of the file is: " + extractedTime)
-    
+    timeLessThanOneSecond = float(fileModifiedDateTime.strftime("%-S")) % 1
+    extractedTime = extractedTime + str(timeLessThanOneSecond)[2:4]
+
+    if DEBUG:
+        print("File name is: " + filePath)
+        print("The modified time of the file is: " + extractedDate)
+        print("The modified date of the file is: " + extractedTime)
     return extractedDate, extractedTime
 
 def getVideoCapturedDateAndTime(filePath):
     '''Get the date and time when the video was created. 
-    return two strings in the format of YYYYMMDD, HHMMSS'''
+    Return two strings in the format of YYYYMMDD, HHMMSSTT'''
+    
+    videoDurationBySeconds = None
     # get video duration by seconds
-    videoClipDurationBySeconds = getVideoDurationBySeconds(filePath)
+    if isFFmpegInstalled:
+        # get the duration of the video in seconds through ffmpeg
+        result = subprocess.run(['ffprobe', 
+                                '-v', 
+                                'error', 
+                                '-show_entries', 
+                                'format=duration', 
+                                '-of', 
+                                'default=noprint_wrappers=1:nokey=1', 
+                                filePath], 
+                                stdout=subprocess.PIPE, 
+                                stderr=subprocess.STDOUT)
+        videoDurationBySeconds = float(result.stdout)
+    elif isMoviepyInstalled:
+        # use moviepy to get the video duration, not very efficient
+        videoDurationBySeconds = VideoFileClip(filePath).duration
+    else:
+        print("Error: ffmpeg and moviepy are not installed, so modified time is used instead of capture starting time.")
+        videoDurationBySeconds = 0.0
+        
     # get the modified time of the file in seconds since the epoch
     fileModifiedTimeBySeconds = os.path.getmtime(filePath)
+    # get the captured time of the video in seconds since the epoch
+    videoCapturedTimeBySeconds = fileModifiedTimeBySeconds - videoDurationBySeconds
+    videoCapturedTimeBySecondsDecimalPart = videoCapturedTimeBySeconds % 1
     # convert the captured time to a datetime object
-    videoStartFilmingDateTime = datetime.datetime.fromtimestamp(fileModifiedTimeBySeconds - videoClipDurationBySeconds)
-
-    extractedDate = videoStartFilmingDateTime.strftime("%Y%m%d")
-    extractedTime = videoStartFilmingDateTime.strftime("%H%M%S")
+    videoCapturedDateTime = datetime.datetime.fromtimestamp(videoCapturedTimeBySeconds)
+    # extract the date in the format of YYYYMMDD
+    extractedDate = videoCapturedDateTime.strftime("%Y%m%d")
+    # extract the time in the format of HHMMSSTT, in 24-hour format
+    extractedTime = videoCapturedDateTime.strftime("%H%M%S") + str(videoCapturedTimeBySecondsDecimalPart)[2:4]
+    if DEBUG:
+        print("File name is: " + filePath)
+        print("The captured date of the video is: " + extractedTime)
+        print("The captured time of the video is: " + extractedDate)
     return extractedDate, extractedTime
 
 
-import subprocess
-def getVideoDurationBySeconds(filePath):
-    '''Get the duration of the video in seconds'''
-    # get the duration of the video in seconds
-    result = subprocess.run(['ffprobe', 
-                             '-v', 
-                             'error', 
-                             '-show_entries', 
-                             'format=duration', 
-                             '-of', 
-                             'default=noprint_wrappers=1:nokey=1', 
-                             filePath], 
-                             stdout=subprocess.PIPE, 
-                             stderr=subprocess.STDOUT)
-    videoClipDurationBySeconds = float(result.stdout)
-    return videoClipDurationBySeconds
+def getFileMetadata(filePath):
+    # if the code is running on macOS, use the mdls command to get the metadata
 
-# from moviepy.editor import VideoFileClip
-# def getVideoDurationBySeconds(filePath):
-#     '''Get the duration of the video in seconds'''
-#     videoClip = VideoFileClip(filePath)
-#     videoClipDurationBySeconds = videoClip.duration
-#     return videoClipDurationBySeconds
+    # if the code is running on Windows or linux, use the exiftool command to get the metadata
+    try:
+        cmd = ['exiftool', '-json', filePath]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        # Check for errors
+        if result.returncode != 0:
+            print(f"Error running exiftool: {result.stderr}")
+            return None
+        # Parse the JSON output
+        metadata = json.loads(result.stdout)
+        return metadata
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
 
 # ==================== Functions to check the file and type ====================
 
-def isFileProcessedOldFormat(filePath):
-    '''check if the file name is in the format of
-    YYYYMMDD_DDDDD_CCCC_BB_HHMMSS_AA
-    (Date_CameraID_SequenceID_ChapterID_Time_Codex)'''
-    filenameWithExtension = os.path.basename(filePath)
-    try:
-        # try split the file name into 6 parts.
-        filenameParts = re.split("_", filenameWithExtension)
-        # check if the there are 6 parts
-        if not len(filenameParts) == 6:
-            return False
-        # check if the first part is a date like YYYYMMDD
-        if not filenameParts[0].isdigit() or not len(filenameParts[0]) == 8:
-            return False
-        # camera ID is usually customized, so it is not checked here.
-        # check if the third part is a sequence number like CCCC
-        if not filenameParts[2].isdigit() or not len(filenameParts[2]) == 4:
-            return False
-        # check if the fourth part is a chapter number like BB
-        if not filenameParts[3].isdigit() or not len(filenameParts[3]) == 2:
-            return False
-        # check if the fifth part is a time like HHMMSS (24 hour format)
-        if not filenameParts[4].isdigit() or not len(filenameParts[4]) == 6:
-            return False
-        # check if the sixth part is a codex in the lists.
-        if not filenameParts[5] in (goproVideoCodexList 
-                                    + goproImageCodexList 
-                                    + iphoneVideoCodexList 
-                                    + iphoneImageCodexList):
-            return False
-        print("The file name " + filenameWithExtension + " is possibly processed in the old format already.")
+def isVideoFile(filePath):
+    '''check if the file is a video file'''
+    fileExtension = os.path.splitext(filePath)[1]
+    if fileExtension.upper() in videoFileExtensionList:
         return True
-    except:
+    else:
         return False
 
-def isFileProcessed(filePath):
-    '''
-    check if the file name is in the format of 
-    YYYYMMDD_HHMMSS_XY_DDDDD_CCCC_BB_AA
-    (Date_Time_CameraAndDataType_CameraID_SequenceID_ChapterID_Codex).* 
-    '''
-    filenameWithExtension = os.path.basename(filePath)
-    # get the file without extension
-    filenameWithoutExtension = os.path.splitext(filenameWithExtension)[0]
-    try:
-        # try split the file name into 7 parts.
-        filenameParts = re.split("_", filenameWithoutExtension)
-        # check if the there are 7 parts
-        if not len(filenameParts) == 7:
-            return False
-        # check if the first part is a date like YYYYMMDD
-        if not filenameParts[0].isdigit() or not len(filenameParts[0]) == 8:
-            return False
-        # check if the second part is a time like HHMMSS (24 hour format)
-        if not filenameParts[1].isdigit() or not len(filenameParts[1]) == 6:
-            return False
-        # check if the third part is a camera and data type abbreviation
-        if not filenameParts[2] in CameraAndDataTypeAbbreviation.values():
-            return False
-        # Considering camera ID is very likely to be customized, so it is not checked here.
-        # check if the fifth part is a sequence number like CCCC
-        if not filenameParts[4].isdigit() or not len(filenameParts[4]) == 4:
-            return False
-        # check if the sixth part is a chapter number like BB
-        if not filenameParts[5].isdigit() or not len(filenameParts[5]) == 2:
-            return False
-        # check if the seventh part is a codex in the lists.
-        if not filenameParts[6] in (goproVideoCodexList 
-                                    + goproImageCodexList 
-                                    + iphoneVideoCodexList 
-                                    + iphoneImageCodexList):
-            return False
-        print("The file name " + filenameWithExtension + " is possibly processed already.")
+def isImageFile(filePath):
+    '''check if the file is an image file'''
+    fileExtension = os.path.splitext(filePath)[1]
+    if fileExtension.upper() in imageFileExtensionList:
         return True
-    except:
+    else:
         return False
 
-def isGoProVideoFile(filePath):
-    '''check if the file name is in the format of AABBCCCC.MP4, 
-    which is the GoPro video file name format.'''
-    # There is supposed to be a better way to check if the file is from GoPro.
-    filenameWithExtension = os.path.basename(filePath)
-    filenameWithoutExtension = os.path.splitext(filenameWithExtension)[0]
-    fileExtension = os.path.splitext(filenameWithExtension)[1]
-    if len(filenameWithoutExtension) != 8:
-        return False
-    # check if the first two characters are the codex
-    if not filenameWithoutExtension[0:2] in goproVideoCodexList:
-        return False
-    # check if the next four characters are the sequence number
-    if not filenameWithoutExtension[2:6].isdigit():
-        return False
-    # check if the last two characters are the chapter number
-    if not filenameWithoutExtension[6:8].isdigit():
-        return False
-    # check if the file extension is in the goproVideoFileExtensionList
-    if not fileExtension.upper() in goproVideoFileExtensionList:    
-        return False
-    if DEBUG:
-        print("The file name " + filenameWithExtension + " is most likely a GoPro video file name.")
-    return True
-
-def isGoProImageFile(filePath):
-    '''check if the file name is in the format of GS_xxxx.JPG, GS_xxxx.PNG'''
-    # There is supposed to be a better way to check if the file is from GoPro.
-    filenameWithExtension = os.path.basename(filePath)
-    filenameWithoutExtension = os.path.splitext(filenameWithExtension)[0]
-    fileExtension = os.path.splitext(filenameWithExtension)[1]
-    if len(filenameWithoutExtension) != 7:
-        return False
-    # check if it can be split into two parts by "_"
-    try:
-        filenameParts = re.split("_", filenameWithoutExtension)
-        # check if the first part is GS
-        if not filenameParts[0] in goproImageCodexList:
-            return False
-        # check if the second part is a sequence number
-        if not (filenameParts[1].isdigit() and len(filenameParts[1]) == 4):
-            return False
-        # check if the file extension is in the goproImageFileExtensionList
-        if not fileExtension.upper() in goproImageFileExtensionList:    
-            return False
-        if DEBUG:
-            print("The file name " + filenameWithExtension + " is most likely a GoPro regular image file name.")
+def isVideoOrImageFile(filePath):
+    '''check if the file is a video or image file'''
+    fileExtension = os.path.splitext(filePath)[1]
+    if fileExtension.upper() in videoFileExtensionList:
         return True
-    except:
+    elif fileExtension.upper() in imageFileExtensionList:
+        return True
+    else:
         return False
 
-def isGoProUtilityFile(filePath):
-    '''check if the filename extension is in the goproUtilityFileExtensionList'''
+def isUselessFile(filePath):
+    '''check if the filename extension is in the uselessFileExtensionList'''
     filenameWithExtension = os.path.basename(filePath)
-    if os.path.splitext(filenameWithExtension)[1].upper() in goproUtilityFileExtensionList:
+    if os.path.splitext(filenameWithExtension)[1].upper() in uselessFileExtensionList:
         if DEBUG:
             print("The file " + filenameWithExtension + " is most likely a GoPro utility file.")
         return True
 
-def isIphoneVideoFile(filePath):
-    '''check if the file name is in the format of IMG_xxxx.MOV'''
-    # There is supposed to be a better way to check if the file is from iPhone.
-    filenameWithExtension = os.path.basename(filePath)
-    filenameWithoutExtension = os.path.splitext(filenameWithExtension)[0]
-    fileExtension = os.path.splitext(filenameWithExtension)[1]
-    if len(filenameWithoutExtension) != 8:
-        return False
-    # check if it can be split into two parts by "_"
-    try:
-        filenameParts = re.split("_", filenameWithoutExtension)
-        # check if the first part is IMG
-        if not filenameParts[0] == "IMG":
-            return False
-        # check if the second part is a sequence number
-        if not (filenameParts[1].isdigit() and len(filenameParts[1]) == 4):
-            return False
-        # check if the file extension is in the iphoneVideoFileExtensionList
-        if not fileExtension.upper() in iphoneVideoFileExtensionList:    
-            return False
-        if DEBUG:
-            print("The file name " + filenameWithExtension + " is most likely an iPhone video file name.")
-        return True
-    except:
-        return False 
-
-def isIphoneImageFile(filePath):
-    '''check if the file name is in the format of IMG_xxxx.JPG, IMG_xxxx.HEIC'''
-    # There is supposed to be a better way to check if the file is from iPhone.
-    filenameWithExtension = os.path.basename(filePath)
-    filenameWithoutExtension = os.path.splitext(filenameWithExtension)[0]
-    fileExtension = os.path.splitext(filenameWithExtension)[1]
-    if len(filenameWithoutExtension) != 8:
-        return False
-    # check if it can be split into two parts by "_"
-    try:
-        filenameParts = re.split("_", filenameWithoutExtension)
-        # check if the first part is IMG
-        if not filenameParts[0] == "IMG":
-            return False
-        # check if the second part is a sequence number
-        if not (filenameParts[1].isdigit() and len(filenameParts[1]) == 4):
-            return False
-        # check if the file extension is in the iphoneImageFileExtensionList
-        if not fileExtension.upper() in iphoneImageFileExtensionList:    
-            return False
-        if DEBUG:
-            print("The file name " + filenameWithExtension + " is most likely an iPhone image file name.")
-        return True
-    except:
-        return False   
-
-
-
-# ==================== More general functions ====================
+# ==================== More of the general functions ====================
 def isThereSubFolder(folderPath):
     '''check if there is any sub folder in the folder'''
     for filename in os.listdir(folderPath):
@@ -556,7 +325,6 @@ def mergeSubFolders(sourceFolderPath, destinationFolderPath = None):
         # delete the sub folder
         os.rmdir(subFolderPath)
 
-
 def getFilenameListExcludingFileExtension(folderPath, fileExtension, isCaseSensitive = False):
     ''' Get the file name list in the folder, excluding the file extension.'''
     filenameList = []
@@ -581,6 +349,13 @@ def getFilePathListExcludingFileExtension(folderPath, fileExtension, isCaseSensi
         for filename in os.listdir(folderPath):
             if not filename.lower().endswith(fileExtension.lower()):
                 filePathList.append(os.path.join(folderPath, filename))
+    return filePathList
+
+def getFilePathList(folderPath):
+    '''get the file path list in the folder.'''
+    filePathList = []
+    for filename in os.listdir(folderPath):
+        filePathList.append(os.path.join(folderPath, filename))
     return filePathList
 
 def getFilenameListByFileExtension(folderPath, fileExtension, isCaseSensitive = False):
@@ -616,247 +391,226 @@ def deleteFileByExtension(folderPath, fileExtension):
         print("Deleting " + fileName)
         os.remove(os.path.join(folderPath, fileName))
 
-
 def deleteGoproTrashFiles(folderPath):
     #remove all files with the extension of .THM or .LRV
     deleteFileByExtension(folderPath, ".THM")
     deleteFileByExtension(folderPath, ".LRV")
 
-
-# ==================== Key functions ====================
-
-def getFormattedFilename(fileInformation: FileInformation, 
-                         overrideCameraTypeAbbreviation = None,
-                         overrideCameraID = None):
-    '''Get the formatted file name based on the file information'''
-    # get the extension of the file
-    # if the file is a 
-    # GoPro video file, GoPro image file, iPhone video file or iPhone image file, 
-    # make a formatted filename
-    if fileInformation.fileType == FileType.GOPRO_VIDEO \
-        or fileInformation.fileType == FileType.GOPRO_IMAGE \
-        or fileInformation.fileType == FileType.IPHONE_VIDEO \
-        or fileInformation.fileType == FileType.IPHONE_IMAGE:
-
-        if overrideCameraTypeAbbreviation:
-            cameraTypeAbbreviation = overrideCameraTypeAbbreviation
-        else:
-            cameraTypeAbbreviation = CameraAndDataTypeAbbreviation[fileInformation.cameraAndDataType]
-        if overrideCameraID:
-            cameraID = overrideCameraID
-        else:
-            cameraID = fileInformation.cameraID
-
-        fileExtension = os.path.splitext(fileInformation.filePath)[1]
-        formattedFilenameWithExtension = fileInformation.capturedDate + "_" \
-            + fileInformation.capturedTime + "_" \
-            + cameraTypeAbbreviation + "_" \
-            + cameraID + "_" \
-            + fileInformation.sequenceID + "_" \
-            + fileInformation.chapterID + "_" \
-            + fileInformation.codex + fileExtension
-    else:
-        formattedFilenameWithExtension = None
-        print("Error while trying to get the formatted file name for " \
-              + fileInformation.filePath + ".")
-        print("The file type is not supported.")
-    return formattedFilenameWithExtension
-
-def getOriginalName(fileInformation):
-    '''Get the original name of the file based on the file information'''
-    # get the extension of the file
-    fileExtension = os.path.splitext(fileInformation.filePath)[1]
-    
-    if fileInformation.fileType == FileType.PROCESSED_GOPRO_VIDEO: # AABBCCCC.MP4
-        originalNameWithExtension = fileInformation.codex \
-                                    + fileInformation.sequenceID \
-                                    + fileInformation.chapterID \
-                                    + fileExtension
-    elif fileInformation.fileType == FileType.PROCESSED_GOPRO_IMAGE: # GS_xxxx.JPG, GS_xxxx.PNG
-        originalNameWithExtension = fileInformation.codex \
-                                    + "_" + fileInformation.sequenceID \
-                                    + fileExtension
-    elif fileInformation.fileType == FileType.PROCESSED_IPHONE_VIDEO: # IMG_xxxx.MOV
-        originalNameWithExtension = fileInformation.codex + "_" \
-                                    + fileInformation.sequenceID \
-                                    + fileExtension
-    elif fileInformation.fileType == FileType.PROCESSED_IPHONE_IMAGE: # IMG_xxxx.JPG, IMG_xxxx.HEIC
-        originalNameWithExtension = fileInformation.codex + "_" \
-                                    + fileInformation.sequenceID \
-                                    + fileExtension
-    else:
-        originalNameWithExtension = None
-        print("Error while trying to get the original file name for " \
-              + fileInformation.filePath + ".")
-        print("The file type is not supported.")
-    return originalNameWithExtension
-
 # ==================== Functions to rename the file ====================
+def checkFilenameType(filenameWithoutExtension):
+    '''check the filename type, return the filename type'''
+    if DEBUG:
+        print("Checking the filename type of " + filenameWithoutExtension + ".")
+    for filenameType in FilenameType:
+        if filenameType != FilenameType.Unknown:
+        # check if the filename matches the pattern
+            if validateString(FilenamePattern[filenameType], filenameWithoutExtension):
+                return filenameType
+    return FilenameType.Unknown
+
+
+def getFormattedNameV3(filePath, destinationFolderPath = None, overrideCameraID = None, defaultCameraID = "Cid"):
+    '''Rename the file to the formatted name in the format of YYYYMMDD_HHMMSSTT_IIIII(?:_NN)(OriginalFilename)'''
+    # get the file information
+    filename = os.path.basename(filePath)
+    filenameWithoutExtension, fileExtension = os.path.splitext(filename)
+    destinationFolderPath = os.path.dirname(filePath) if destinationFolderPath is None else destinationFolderPath
+
+    capturedDate = None
+    capturedTime = None
+    cameraID = None
+    uniqueID = 1
+    originalFilenameWithoutExtension = None
+
+    # get the captured date and time
+    if isVideoFile(filePath):
+        capturedDate, capturedTime = getVideoCapturedDateAndTime(filePath)
+    elif isImageFile(filePath):
+        capturedDate, capturedTime = getModifiedDateAndTime(filePath)
+    else:
+        if DEBUG:
+            print("The file is not a video or image file.")
+        return None
+    
+    # get the filename type
+    filenameType = checkFilenameType(filenameWithoutExtension)
+    if filenameType == FilenameType.FormattedV1:
+        # get the original filename
+        originalFilenameWithoutExtension, cameraID = getOriginalFilenameFromFormattedV1(filenameWithoutExtension)
+    elif filenameType == FilenameType.FormattedV2:
+        # get the original filename
+        originalFilenameWithoutExtension, cameraID = getOriginalFilenameFromFormattedV2(filenameWithoutExtension)
+    elif filenameType == FilenameType.FormattedV3:
+        # get the original filename
+        originalFilenameWithoutExtension, cameraID = getOriginalFilenameFromFormattedV3(filenameWithoutExtension)
+    else:
+        # in this case, the original filename is the same with the filename without extension cause it is not formatted yet.
+        originalFilenameWithoutExtension = filenameWithoutExtension
+    
+    # get the camera ID. If overrideCameraID is None, use the camera ID in the filename.
+    # Potentially, we can try to figure out the camera ID from the file metadata.
+    # But this is not implemented yet.
+    # cameraID = getCameraIDFromMetadata(filePath)
+
+    if overrideCameraID is None:
+        if cameraID is None:
+            cameraID = defaultCameraID
+    else:
+        cameraID = overrideCameraID
+    
+    # get the potential formatted filename
+    potentialFormattedFilename = capturedDate + "_" + capturedTime + "_" + cameraID \
+        + "(" + originalFilenameWithoutExtension + ")" + fileExtension
+
+    # check if the potential formatted filename has a file with the same name in the destination folder
+    while os.path.isfile(os.path.join(destinationFolderPath, potentialFormattedFilename)):
+        # if there is a file with the same name, increase the unique ID by 1
+        uniqueID = uniqueID + 1
+        # get a new potential formatted filename
+        # if the unique ID is an integer larger than 1, add the unique ID to the filename
+        if uniqueID > 1 and uniqueID % 1 == 0 and uniqueID < 100:
+            potentialFormattedFilename = capturedDate + "_" + capturedTime + "_" + cameraID \
+                + "_" + str(uniqueID).zfill(2) + "(" + originalFilenameWithoutExtension + ")" + fileExtension
+        else:
+            if DEBUG:
+                print("The unique ID is not an integer larger than 1 and smaller than 100.")
+            return None
+    return potentialFormattedFilename
+        
+def getOriginalFilenameFromFormattedV1(filenameWithoutExtension):
+    '''Get the original filename from the formatted name in the format of YYYYMMDD_IIIII_SSSS_PP_HHMMSS_CC.
+    Will return None if the filename is not in the format of FormattedV1.
+    if the filename is in the format of FormattedV1, return the original filename and the camera ID.'''
+    # get the file information
+    if checkFilenameType(filenameWithoutExtension) == FilenameType.FormattedV1:
+        date, cameraID, sequenceNumber, chapterNumber, time, codex = filenameWithoutExtension.split("_")
+        return codex+chapterNumber+sequenceNumber, cameraID
+    else:
+        if DEBUG:
+            print("The filename (without extension) " + filenameWithoutExtension + " is not in the format of FormattedV1.")
+        return None, None
+    
+def getOriginalFilenameFromFormattedV2(filenameWithoutExtension):
+    '''Get the original filename from the formatted name in the format of YYYYMMDD_HHMMSS_XY_IIIII_SSSS_PP_CC'''
+    # get the file information
+    if checkFilenameType(filenameWithoutExtension) == FilenameType.FormattedV2:
+        date, time, cameraAndDataType, cameraID, sequenceNumber, chapterNumber, codex = filenameWithoutExtension.split("_")
+        originalFilenameWithoutExtension = None
+        if cameraAndDataType == "GV":
+            originalFilenameWithoutExtension = codex + chapterNumber + sequenceNumber
+        elif cameraAndDataType == "GI":
+            pass 
+        elif (cameraAndDataType == "IV" or cameraAndDataType == "II") and codex == "IMG":
+            originalFilenameWithoutExtension = "IMG_" + sequenceNumber
+        elif cameraAndDataType == "CV" and codex == "MVI":
+            originalFilenameWithoutExtension = "MVI_" + sequenceNumber
+        elif cameraAndDataType == "CI" and codex == "DSCF":
+            originalFilenameWithoutExtension = "DSCF" + sequenceNumber
+        else: # unknown camera and data type
+            if DEBUG:
+                print("The camera and data type is unknown.")
+            return None
+        return originalFilenameWithoutExtension, cameraID
+    else:
+        if DEBUG:
+            print("The filename is not in the format of FormattedV2.")
+        return None, None
+
+def getOriginalFilenameFromFormattedV3(filenameWithoutExtension):
+    '''Get the original filename from the formatted name in the format of YYYYMMDD_HHMMSSTT_IIIII(_NN)？(OriginalFilename)'''
+    # get the file information
+    if checkFilenameType(filenameWithoutExtension) == FilenameType.FormattedV3:
+        originalFilenameWithoutExtension = filenameWithoutExtension.split("(")[1]
+        originalFilenameWithoutExtension = originalFilenameWithoutExtension.split(")")[0]
+        cameraID = filenameWithoutExtension.split("_")[2]
+        return originalFilenameWithoutExtension, cameraID
+    else:
+        if DEBUG:
+            print("The filename is not in the format of FormattedV3.")
+        return None, None
+
+def renameFile(filePath, newFilename, destinationFolderPath = None):
+    '''Rename the file to the new filename.'''
+    destinationFolderPath = os.path.dirname(filePath) if destinationFolderPath is None else destinationFolderPath
+    # check if the file exists
+    if not os.path.isfile(filePath):
+        if DEBUG:
+            print("The file " + filePath + " does not exist.")
+        return False
+    # check if the new filename exists in the destination folder
+    if os.path.isfile(os.path.join(destinationFolderPath, newFilename)):
+        if DEBUG:
+            print("The file " + newFilename + " already exists in the destination folder " + destinationFolderPath + ".")
+        return False
+    # rename the file
+    try:
+        os.rename(filePath, os.path.join(destinationFolderPath, newFilename))
+        return True
+    except Exception as e:
+        if DEBUG:
+            print("Error: " + e)
+        return False
+
+def renameMediaFilesInFolder(sourceFolder, destinationFolder = None, overrideCameraID = None, defaultCameraID = "Cid"):
+    '''Process all the files in the folder'''
+    destinationFolder = sourceFolder if destinationFolder is None else destinationFolder
+    # get the file path list
+    filePathList = getFilePathList(sourceFolder)
+    # rename the files
+    for filePath in filePathList:
+        newFilename = getFormattedNameV3(filePath, destinationFolder, overrideCameraID, defaultCameraID)
+        if newFilename is not None:
+            renameFile(filePath, newFilename, destinationFolder)
+            if DEBUG:
+                print("The file " + filePath + " is renamed to " + newFilename + " and moved to " + destinationFolder + ".")
+        else:
+            if DEBUG:
+                print("The file " + filePath + " is not renamed.")
+            continue
+
+def restoreOriginalFilenamesInFolder(sourceFolder, destinationFolder = None):
+    '''Process all the files in the folder'''
+    destinationFolder = sourceFolder if destinationFolder is None else destinationFolder
+    # get the file path list
+    filePathList = getFilePathList(sourceFolder)
+    # rename the files
+    for filePath in filePathList:
+        filenameWithoutExtension, fileExtension = os.path.splitext(os.path.basename(filePath))
+        filenameType = checkFilenameType(filenameWithoutExtension)
+
+        if filenameType == FilenameType.FormattedV1:
+            newFilename = getOriginalFilenameFromFormattedV1(filenameWithoutExtension)[0] + fileExtension
+        elif filenameType == FilenameType.FormattedV2:
+            newFilename = getOriginalFilenameFromFormattedV2(filenameWithoutExtension)[0] + fileExtension
+        elif filenameType == FilenameType.FormattedV3:
+            newFilename = getOriginalFilenameFromFormattedV3(filenameWithoutExtension)[0] + fileExtension
+        else: # the filename is not formatted
+            print("The filename " + os.path.basename(filePath) + " is not formatted in a known way.")
+            continue
+            
+        if newFilename is not None:
+            renameFile(filePath, newFilename, destinationFolder)
+            if DEBUG:
+                print("The file " + filePath + " is renamed to " + newFilename + " and moved to " + destinationFolder + ".")
+        else:
+            if DEBUG:
+                print("The file " + filePath + " is not renamed.")
+            continue
 
 def checkFilesInFolder(folderPath, printDetailedList = False):
-    '''check the files in the folder and print the file type'''
-    # if a gopro video group is found, it is added to the dictionary, 
-    # sequence number as key, chapter number as value list.
-    goproVideoGroupDict = {}
+    '''check the files in the folder, print the detailed list if printDetailedList is True'''
+    fileTypeCountDict = {}
+    for filenameType in FilenameType:
+        fileTypeCountDict[filenameType] = 0
 
-    # count the number of different files in the folder
-    goproVideoFileCount = 0
-    goproImageFileCount = 0
-    goproUtilityFileCount = 0
-
-    iphoneVideoFileCount = 0
-    iphoneImageFileCount = 0
-    
-    unknownFileCount = 0
-
-    unknownFileList = []
-
-    for filename in os.listdir(folderPath):
-        filePath = os.path.join(folderPath, filename)
-
-        fileType = evaluateFileType(filePath)
-        
-        if fileType == FileType.GOPRO_VIDEO:
-            goproVideoFileCount += 1
-            # a GoPro video file name is in the format of AABBCCCC.MP4
-            filenameWithoutExtension = os.path.splitext(filename)[0]
-            codex = filenameWithoutExtension[0:2]
-            sequenceID = filenameWithoutExtension[2:6]
-            chapterID = filenameWithoutExtension[6:8]
-            if sequenceID in goproVideoGroupDict:
-                goproVideoGroupDict[sequenceID].append(chapterID)
-            else:
-                goproVideoGroupDict[sequenceID] = [chapterID]
-        elif fileType == FileType.GOPRO_IMAGE:
-            goproImageFileCount += 1
-        elif fileType == FileType.GOPRO_UTILITIES:
-            goproUtilityFileCount += 1
-        elif fileType == FileType.IPHONE_VIDEO:
-            iphoneVideoFileCount += 1
-        elif fileType == FileType.IPHONE_IMAGE:
-            iphoneImageFileCount += 1
-        else:
-            unknownFileCount += 1
-            unknownFileList.append(filename)
-    # remove the goproVideoGroupDict elements if its chapterID list lens is 1
-    for sequenceID in list(goproVideoGroupDict):
-        if len(goproVideoGroupDict[sequenceID]) == 1:
-            del goproVideoGroupDict[sequenceID]
-        else:
-            goproVideoGroupDict[sequenceID].sort()
-
-    # print the file type count
-    print("The file checking result in the folder " + folderPath + ":")
-
-    print("GoPro video file count: " + str(goproVideoFileCount))
-    # if there are gopro video groups, print the gopro video group info
-    if len(goproVideoGroupDict) > 0:
-        print("GoPro video group count: " + str(len(goproVideoGroupDict)))
-        if printDetailedList:
-            for sequenceID in goproVideoGroupDict:
-                print("Sequence ID: " + sequenceID)
-                print("Chapter ID list: " + str(goproVideoGroupDict[sequenceID]))
-    print("GoPro image file count: " + str(goproImageFileCount))
-    print("GoPro utility file count: " + str(goproUtilityFileCount))
-    print("iPhone video file count: " + str(iphoneVideoFileCount))
-    print("iPhone image file count: " + str(iphoneImageFileCount))
-    print("Unknown file count: " + str(unknownFileCount))
-    print("Unknown file list: \n" + str(unknownFileList))
+    for filenameWithExtension in os.listdir(folderPath):
+        filenameWithoutExtension, fileExtension = os.path.splitext(filenameWithExtension)
+        filenameType = checkFilenameType(filenameWithoutExtension)
+        fileTypeCountDict[filenameType] = fileTypeCountDict[filenameType] + 1
+        if printDetailedList and filenameType == FilenameType.Unknown:
+            print(filenameWithExtension + " is not recognized.")
+    print("The file type count in the folder is: ")
+    for filenameType in FilenameType:
+        print(str(filenameType) + ": " + str(fileTypeCountDict[filenameType]))
 
 
-def renameFileToFormattedFilename(filePath,
-                                  overrideCameraTypeAbbreviation = None,
-                                  overrideCameraID = None,
-                                  defaultGoproCameraID = "11Mini",
-                                  defaultIphoneCameraID = "iPhone13"):
-    '''rename the file to a formatted file name based on the file information'''
-    # get the file information
-
-
-    fileInformation = getFileInformation(filePath,
-                                         defaultGoproCameraID,
-                                         defaultIphoneCameraID)
-    # get the formatted file name
-    formattedFilenameWithExtension = getFormattedFilename(fileInformation, 
-                                                          overrideCameraTypeAbbreviation,
-                                                          overrideCameraID)    
-    # rename the file
-    if formattedFilenameWithExtension:
-        try:
-            os.rename(filePath, os.path.join(os.path.dirname(filePath), formattedFilenameWithExtension))
-            if DEBUG:
-                print("The file " + filePath + " is renamed to " + formattedFilenameWithExtension)
-            # return the new file path
-            return os.path.join(os.path.dirname(filePath), formattedFilenameWithExtension)
-        except:
-            print("Error while trying to rename the file " + filePath + " to " + formattedFilenameWithExtension)
-    else:
-        print("Error while trying to rename the file " + filePath + ".")
-    return None
-
-def renameFileToOriginalName(filePath):
-    '''rename the file to the original name based on the file information'''
-    # get the file information
-    fileInformation = getFileInformation(filePath)
-    # get the original file name
-    originalNameWithExtension = getOriginalName(fileInformation)
-    # rename the file
-    if originalNameWithExtension:
-        try:
-            os.rename(filePath, os.path.join(os.path.dirname(filePath), originalNameWithExtension))
-            if DEBUG:
-                print("The file " + filePath + " is renamed to " + originalNameWithExtension)
-            # return the new file path
-            return os.path.join(os.path.dirname(filePath), originalNameWithExtension)
-        except:
-            print("Error while trying to rename the file " + filePath + " to " + originalNameWithExtension)
-    else:
-        print("Error while trying to rename the file " + filePath + ".")
-    return
-
-def renameFilesInFolderToFormattedName(sourceFolder,
-                        destinationFolder,
-                        overrideCameraTypeAbbreviation = None,
-                        overrideCameraID = None,
-                        defaultGoproCameraID = "11Mini",
-                        defaultIphoneCameraID = "iPhone13"):
-    '''rename the files in the folder to formatted file names'''
-    if DEBUG:
-        print("Start rename the video filename to the formatted name from: \n" 
-            + sourceFolder + "\n to: \n" + destinationFolder)
-    # get the file path list
-    filePathList = getFilePathListExcludingFileExtension(sourceFolder, ".py")
-    if DEBUG:
-        print("The file path list is: " + str(filePathList))
-    # rename the files in the folder
-    for filePath in filePathList:
-        if DEBUG:
-            print("renameFilesInFolderToFormattedName starts renaming the file " + filePath)
-        newFilePath = renameFileToFormattedFilename(filePath, 
-                                                    overrideCameraTypeAbbreviation,
-                                                    overrideCameraID,
-                                                    defaultGoproCameraID,
-                                                    defaultIphoneCameraID)
-        # move the file to the destination folder
-        if destinationFolder and (sourceFolder != destinationFolder):
-            try:
-                shutil.move(newFilePath, destinationFolder)
-            except:
-                print("Error while trying to move the file " + filePath + " to " + destinationFolder)
-
-def renameFilesInFolderToOriginalName(sourceFolder,
-                                      destinationFolder):
-        '''rename the files in the folder to original file names'''
-        # get the file path list
-        filePathList = getFilePathListExcludingFileExtension(sourceFolder, ".py")
-        if DEBUG:
-            print("The file path list is: " + str(filePathList))
-        # rename the files in the folder
-        for filePath in filePathList:
-            newFilePath = renameFileToOriginalName(filePath)
-            # move the file to the destination folder
-            if destinationFolder and (sourceFolder != destinationFolder):
-                try:
-                    shutil.move(newFilePath, destinationFolder)
-                except:
-                    print("Error while trying to move the file " + filePath + " to " + destinationFolder)
