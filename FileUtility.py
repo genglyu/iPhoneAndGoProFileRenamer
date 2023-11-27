@@ -115,7 +115,6 @@ FilenamePattern = {
 
     FilenameType.FormattedV1: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([a-zA-Z0-9]+)_\d{4}_([0-9]{2})_([0-1][0-9]|2[0-3])([0-5][09])([0-5][0-9])_G(H|X)$',
     FilenameType.FormattedV2: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])_([a-zA-Z]{2})_([a-zA-Z0-9]+)_\d{4}_([0-9]{2})_([0-1][0-9]|2[0-3])([0-5][09])([0-5][09])_(GX|GH|GS|IMG|MVI|DSCF)$',
-    # FilenameType.FormattedV3: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])([0-9]{2}})_([a-zA-Z0-9])+(?:_([0-9]{2}))\(([a-zA-Z0-9]+)\)$'
     FilenameType.FormattedV3: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])([0-9]{2})_([a-zA-Z0-9]+)(_[0-9]{2})?\(([^\)]*)\)$'
 
 }
@@ -146,8 +145,8 @@ def getModifiedDateAndTime(filePath):
     extractedDate = fileModifiedDateTime.strftime("%Y%m%d")
     # extract the time in the format of HHMMSSTT
     extractedTime = fileModifiedDateTime.strftime("%H%M%S")
-    timeLessThanOneSecond = float(fileModifiedDateTime.strftime("%-S")) % 1
-    extractedTime = extractedTime + str(timeLessThanOneSecond)[2:4]
+    timeLessThanOneSecond = fileModifiedTimeBySeconds % 1
+    extractedTime = extractedTime + format(timeLessThanOneSecond, ".6f")[2:4]
 
     if DEBUG:
         print("File name is: " + filePath)
@@ -180,7 +179,7 @@ def getVideoCapturedDateAndTime(filePath):
     else:
         print("Error: ffmpeg and moviepy are not installed, so modified time is used instead of capture starting time.")
         videoDurationBySeconds = 0.0
-        
+
     # get the modified time of the file in seconds since the epoch
     fileModifiedTimeBySeconds = os.path.getmtime(filePath)
     # get the captured time of the video in seconds since the epoch
@@ -191,7 +190,7 @@ def getVideoCapturedDateAndTime(filePath):
     # extract the date in the format of YYYYMMDD
     extractedDate = videoCapturedDateTime.strftime("%Y%m%d")
     # extract the time in the format of HHMMSSTT, in 24-hour format
-    extractedTime = videoCapturedDateTime.strftime("%H%M%S") + str(videoCapturedTimeBySecondsDecimalPart)[2:4]
+    extractedTime = videoCapturedDateTime.strftime("%H%M%S") + format(videoCapturedTimeBySecondsDecimalPart, ".6f")[2:4]
     if DEBUG:
         print("File name is: " + filePath)
         print("The captured date of the video is: " + extractedTime)
@@ -584,8 +583,11 @@ def restoreOriginalFilenamesInFolder(sourceFolder, destinationFolder = None):
             newFilename = getOriginalFilenameFromFormattedV2(filenameWithoutExtension)[0] + fileExtension
         elif filenameType == FilenameType.FormattedV3:
             newFilename = getOriginalFilenameFromFormattedV3(filenameWithoutExtension)[0] + fileExtension
+        elif filenameType == FilenameType.Unknown:
+            print("The filename " + os.path.basename(filePath) + " is not recognized.")
+            continue
         else: # the filename is not formatted
-            print("The filename " + os.path.basename(filePath) + " is not formatted in a known way.")
+            print("The filename " + os.path.basename(filePath) + " is not formatted, \n but it is recognized as a " + str(filenameType) + " file.")
             continue
             
         if newFilename is not None:
