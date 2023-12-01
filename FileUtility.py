@@ -60,7 +60,7 @@ if isFFmpegInstalled:
 
 # the potential file extension for the video file
 videoFileExtensionList = [".MP4", ".MOV", ".MPG", ".MPEG", ".AVI", ".WMV", ".FLV", ".F4V", ".SWF", ".MKV", ".WEBM", ".HTML5"]
-imageFileExtensionList = [".JPG", ".JPEG", ".PNG", ".HEIC", ".GIF", ".BMP", ".TIFF", ".TIF", ".ICO", ".CUR", ".ANI", ".WEBP"]
+imageFileExtensionList = [".JPG", ".JPEG", ".PNG", ".HEIC", ".GIF", ".BMP", ".TIFF", ".TIF", ".ICO", ".CUR", ".ANI", ".WEBP", ".CR2"]
 # the files might appear in the camera folder, but are not useful. Like the thumbnails, or the system files.
 uselessFileExtensionList = [".THM", ".LRV" # GoPro utility files
                             # might add more in the future
@@ -106,6 +106,22 @@ class FilenameType(Enum):
                         # IIIII -> cameraID, string of any length, might contain letters and digits, uppercase and lowercase can be mixed
                         # NN -> unique ID, 2 digits, from 01 to 99, used to distinguish files with the same date and time，
                         # OriginalFilename -> the original file name, string of any length.
+    FormattedV4 = 104 # YYYYMMDD_HHMMSSTT_IIIII(?:_NN)-OriginalFilenameWithoutExtension, in which
+                        # Everything is the same with FormattedV3, except that the OriginalFilename is separated by a dash "-".
+                        # The reason is that
+                        # YYYYMMDD -> date, 8 digits, YYYY -> year (0000 to 9999), MM -> month (01 to 12), DD -> day (01 to 31)，
+                        # HHMMSSTT -> time, 8 digits, HH -> hour (00 to 23), MM -> minute (00 to 59), SS -> second (00 to 59), TT -> time less than one second，
+                        # IIIII -> cameraID, string of any length, might contain letters and digits, uppercase and lowercase can be mixed
+                        # NN -> unique ID, 2 digits, from 01 to 99, used to distinguish files with the same date and time，
+                        # OriginalFilename -> the original file name, string of any length.
+    V3FromGoproMediaLib = 1003 # YYYYMMDD_HHMMSSTT_IIIII(?:_NN)_OriginalFilenameWithoutExtension_
+                        # the formatted V3 files will be renamed to this format when they are imported to the GoPro Media Library, cause the "(" and ")" are replaced by "_".
+                        # Sometimes, it is a potential problem when the original filename contains "_".
+                        # YYYYMMDD -> date, 8 digits, YYYY -> year (0000 to 9999), MM -> month (01 to 12), DD -> day (01 to 31)，
+                        # HHMMSSTT -> time, 8 digits, HH -> hour (00 to 23), MM -> minute (00 to 59), SS -> second (00 to 59), TT -> time less than one second，
+                        # IIIII -> cameraID, string of any length, might contain letters and digits, uppercase and lowercase can be mixed
+                        # NN -> unique ID, 2 digits, from 01 to 99, used to distinguish files with the same date and time，
+                        # OriginalFilename -> the original file name, string of any length.
 
 FilenamePattern = {
     FilenameType.GxPPSSSS: r'^G(H|X)\d{4}$',
@@ -115,8 +131,10 @@ FilenamePattern = {
 
     FilenameType.FormattedV1: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([a-zA-Z0-9]+)_\d{4}_([0-9]{2})_([0-1][0-9]|2[0-3])([0-5][09])([0-5][0-9])_G(H|X)$',
     FilenameType.FormattedV2: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])_([a-zA-Z]{2})_([a-zA-Z0-9]+)_\d{4}_([0-9]{2})_([0-1][0-9]|2[0-3])([0-5][09])([0-5][09])_(GX|GH|GS|IMG|MVI|DSCF)$',
-    FilenameType.FormattedV3: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])([0-9]{2})_([a-zA-Z0-9]+)(_[0-9]{2})?\(([^\)]*)\)$'
+    FilenameType.FormattedV3: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])([0-9]{2})_([a-zA-Z0-9]+)(_[0-9]{2})?\(([^\)]*)\)$',
+    FilenameType.FormattedV4: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])([0-9]{2})_([a-zA-Z0-9]+)(_[0-9]{2})?-([^\)]*)$',
 
+    FilenameType.V3FromGoproMediaLib: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])([0-9]{2})_([a-zA-Z0-9]+)(_[0-9]{2})?_([^\)]*)_$'
 }
 
 def validateString(pattern, testString):
@@ -407,9 +425,8 @@ def checkFilenameType(filenameWithoutExtension):
                 return filenameType
     return FilenameType.Unknown
 
-
-def getFormattedNameV3(filePath, destinationFolderPath = None, overrideCameraID = None, defaultCameraID = "Cid"):
-    '''Rename the file to the formatted name in the format of YYYYMMDD_HHMMSSTT_IIIII(?:_NN)(OriginalFilename)'''
+def getFormattedNameV4(filePath, destinationFolderPath = None, overrideCameraID = None, defaultCameraID = "Cid"):
+    '''Rename the file to the formatted name in the format of YYYYMMDD_HHMMSSTT_IIIII(?:_NN)-OriginalFilename'''
     # get the file information
     filename = os.path.basename(filePath)
     filenameWithoutExtension, fileExtension = os.path.splitext(filename)
@@ -442,6 +459,12 @@ def getFormattedNameV3(filePath, destinationFolderPath = None, overrideCameraID 
     elif filenameType == FilenameType.FormattedV3:
         # get the original filename
         originalFilenameWithoutExtension, cameraID = getOriginalFilenameFromFormattedV3(filenameWithoutExtension)
+    elif filenameType == FilenameType.V3FromGoproMediaLib:
+        # get the original filename
+        originalFilenameWithoutExtension, cameraID = getOriginalFilenameFromFormattedV3FromGoproMediaLib(filenameWithoutExtension)
+    elif filenameType == FilenameType.FormattedV4:
+        # get the original filename
+        originalFilenameWithoutExtension, cameraID = getOriginalFilenameFromFormattedV4(filenameWithoutExtension)
     else:
         # in this case, the original filename is the same with the filename without extension cause it is not formatted yet.
         originalFilenameWithoutExtension = filenameWithoutExtension
@@ -459,7 +482,7 @@ def getFormattedNameV3(filePath, destinationFolderPath = None, overrideCameraID 
     
     # get the potential formatted filename
     potentialFormattedFilename = capturedDate + "_" + capturedTime + "_" + cameraID \
-        + "(" + originalFilenameWithoutExtension + ")" + fileExtension
+        + "-" + originalFilenameWithoutExtension + fileExtension
 
     # check if the potential formatted filename has a file with the same name in the destination folder
     while os.path.isfile(os.path.join(destinationFolderPath, potentialFormattedFilename)):
@@ -469,13 +492,14 @@ def getFormattedNameV3(filePath, destinationFolderPath = None, overrideCameraID 
         # if the unique ID is an integer larger than 1, add the unique ID to the filename
         if uniqueID > 1 and uniqueID % 1 == 0 and uniqueID < 100:
             potentialFormattedFilename = capturedDate + "_" + capturedTime + "_" + cameraID \
-                + "_" + str(uniqueID).zfill(2) + "(" + originalFilenameWithoutExtension + ")" + fileExtension
+                + "_" + str(uniqueID).zfill(2) + "-" + originalFilenameWithoutExtension + fileExtension
         else:
             if DEBUG:
                 print("The unique ID is not an integer larger than 1 and smaller than 100.")
             return None
     return potentialFormattedFilename
-        
+
+
 def getOriginalFilenameFromFormattedV1(filenameWithoutExtension):
     '''Get the original filename from the formatted name in the format of YYYYMMDD_IIIII_SSSS_PP_HHMMSS_CC.
     Will return None if the filename is not in the format of FormattedV1.
@@ -516,7 +540,7 @@ def getOriginalFilenameFromFormattedV2(filenameWithoutExtension):
         return None, None
 
 def getOriginalFilenameFromFormattedV3(filenameWithoutExtension):
-    '''Get the original filename from the formatted name in the format of YYYYMMDD_HHMMSSTT_IIIII(_NN)？(OriginalFilename)'''
+    '''Get the original filename from the formatted name in the format of YYYYMMDD_HHMMSSTT_IIIII(_NN)?(OriginalFilenameWithoutExtension)'''
     # get the file information
     if checkFilenameType(filenameWithoutExtension) == FilenameType.FormattedV3:
         originalFilenameWithoutExtension = filenameWithoutExtension.split("(")[1]
@@ -526,6 +550,61 @@ def getOriginalFilenameFromFormattedV3(filenameWithoutExtension):
     else:
         if DEBUG:
             print("The filename is not in the format of FormattedV3.")
+        return None, None
+
+def getOriginalFilenameFromFormattedV3FromGoproMediaLib(filenameWithoutExtension):
+    '''Get the original filename from the formatted name in the format of YYYYMMDD_HHMMSSTT_IIIII(_NN)?_OriginalFilenameWithoutExtension_'''
+    # get the file information
+    if checkFilenameType(filenameWithoutExtension) == FilenameType.V3FromGoproMediaLib:
+        filenameElements = filenameWithoutExtension.split("_")
+        cameraID = filenameElements[2]
+        originalFilenameWithoutExtension = ""
+        # remove the date, time, cameraID from the filenameElements.
+        # r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])([0-9]{2})_([a-zA-Z0-9]+)(_[0-9]{2})?-([^\)]*)$'
+        filenameElements.pop(0)
+        filenameElements.pop(0)
+        filenameElements.pop(0)
+        if re.match(r'([0-9]{2})$', filenameElements[0]) is not None:
+            filenameElements.pop(0)
+        if len(filenameElements) > 1:
+            # assempble the original filename, with the "_" between the elements
+            for element in filenameElements:
+                originalFilenameWithoutExtension = originalFilenameWithoutExtension + element + "_"
+            # remove the last "_", and the second last "_" introducted by the last ")".
+            originalFilenameWithoutExtension = originalFilenameWithoutExtension[:-2]
+        return originalFilenameWithoutExtension, cameraID
+    else:
+        if DEBUG:
+            print("The filename is not in the format of V3FromGoproMediaLib.")
+        return None, None
+
+def getOriginalFilenameFromFormattedV4(filenameWithoutExtension):
+    '''Get the original filename from the formatted name in the format of YYYYMMDD_HHMMSSTT_IIIII(_NN)?-OriginalFilenameWithoutExtension'''
+    # get the file information
+    if checkFilenameType(filenameWithoutExtension) == FilenameType.FormattedV4:
+        cameraID = filenameWithoutExtension.split("_")[2]
+        originalFilenameWithoutExtension = ""
+
+        filenameRoughElements = filenameWithoutExtension.split("-")
+
+        if len(filenameRoughElements) > 2:
+            # in this case, the original filename is contains "-"
+            for element in filenameRoughElements[2:]:
+                originalFilenameWithoutExtension = originalFilenameWithoutExtension + element + "-"
+            # remove the last "-"
+            originalFilenameWithoutExtension = originalFilenameWithoutExtension[:-1]
+        elif len(filenameRoughElements) == 2:
+            # in this case, the original filename is not contains "-"
+            originalFilenameWithoutExtension = filenameRoughElements[1]
+        else: # len(filenameRoughElements) == 1 or 0
+            # in this case, the filename does not contain "-", which means it is not formatted as formattedV4
+            if DEBUG:
+                print("The filename is not in the format of FormattedV4.")
+            return None, None
+        return originalFilenameWithoutExtension, cameraID
+    else:
+        if DEBUG:
+            print("The filename is not in the format of FormattedV4.")
         return None, None
 
 def renameFile(filePath, newFilename, destinationFolderPath = None):
@@ -557,14 +636,25 @@ def renameMediaFilesInFolder(sourceFolder, destinationFolder = None, overrideCam
     filePathList = getFilePathList(sourceFolder)
     # rename the files
     for filePath in filePathList:
-        newFilename = getFormattedNameV3(filePath, destinationFolder, overrideCameraID, defaultCameraID)
+        newFilename = getFormattedNameV4(filePath, destinationFolder, overrideCameraID, defaultCameraID)
         if newFilename is not None:
             renameFile(filePath, newFilename, destinationFolder)
+            
             if DEBUG:
-                print("The file " + filePath + " is renamed to " + newFilename + " and moved to " + destinationFolder + ".")
+                outputString = "The file " + filePath
+                if newFilename != os.path.basename(filePath):
+                    outputString += " is renamed to " + newFilename
+                else:
+                    outputString += " has the same formatted name"
+
+                if destinationFolder == sourceFolder:
+                    outputString += "."
+                else:
+                    outputString += ", and moved to " + destinationFolder + "."
+                print(outputString)
         else:
             if DEBUG:
-                print("The file " + filePath + " is not renamed.")
+                print("The file " + filePath + " is not renamed or moved.")
             continue
 
 def restoreOriginalFilenamesInFolder(sourceFolder, destinationFolder = None):
@@ -583,6 +673,11 @@ def restoreOriginalFilenamesInFolder(sourceFolder, destinationFolder = None):
             newFilename = getOriginalFilenameFromFormattedV2(filenameWithoutExtension)[0] + fileExtension
         elif filenameType == FilenameType.FormattedV3:
             newFilename = getOriginalFilenameFromFormattedV3(filenameWithoutExtension)[0] + fileExtension
+        elif filenameType == FilenameType.V3FromGoproMediaLib:
+            newFilename = getOriginalFilenameFromFormattedV3FromGoproMediaLib(filenameWithoutExtension)[0] + fileExtension
+        elif filenameType == FilenameType.FormattedV4:
+            newFilename = getOriginalFilenameFromFormattedV4(filenameWithoutExtension)[0] + fileExtension
+
         elif filenameType == FilenameType.Unknown:
             print("The filename " + os.path.basename(filePath) + " is not recognized.")
             continue
@@ -593,7 +688,10 @@ def restoreOriginalFilenamesInFolder(sourceFolder, destinationFolder = None):
         if newFilename is not None:
             renameFile(filePath, newFilename, destinationFolder)
             if DEBUG:
-                print("The file " + filePath + " is renamed to " + newFilename + " and moved to " + destinationFolder + ".")
+                if destinationFolder == sourceFolder:
+                    print("The file " + filePath + " is renamed to " + newFilename + ".")
+                else:
+                    print("The file " + filePath + " is renamed to " + newFilename + " and moved to " + destinationFolder + ".")
         else:
             if DEBUG:
                 print("The file " + filePath + " is not renamed.")
