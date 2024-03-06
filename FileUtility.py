@@ -408,10 +408,42 @@ def deleteFileByExtension(folderPath, fileExtension):
         print("Deleting " + fileName)
         os.remove(os.path.join(folderPath, fileName))
 
-def deleteGoproTrashFiles(folderPath):
+def deleteTinyFileByExtension(folderPath, fileExtension, fileMinimumSizeinMB = 1):
+    # Delete all files in the folder with the specified file extension and size.
+    fileNameList = getFilenameListByFileExtension(folderPath, fileExtension)
+    for fileName in fileNameList:
+        fileSize = os.path.getsize(os.path.join(folderPath, fileName))
+        if fileSize < fileMinimumSizeinMB * 1024 * 1024:
+            print("Deleting " + fileName)
+            os.remove(os.path.join(folderPath, fileName))
+
+def deleteInvisibleFile(folderPath):
+    # Delete all invisible files in the folder    
+    # check if the code is running on macOS or Linux
+    if os.name == "posix":
+        # Invisible files are the files whose name starts with "." in macOS and Linux
+        for filename in os.listdir(folderPath):
+            if filename.startswith("."):
+                print("Deleting " + filename)
+                os.remove(os.path.join(folderPath, filename))
+    # check if the code is running on Windows
+    elif os.name == "nt":
+        # Invisible files are the files whose attribute is hidden in Windows
+        for filename in os.listdir(folderPath):
+            if os.path.isfile(os.path.join(folderPath, filename)):
+                if bool(os.stat(os.path.join(folderPath, filename)).st_file_attributes & stat.FILE_ATTRIBUTE_HIDDEN):
+                    print("Deleting " + filename)
+                    os.remove(os.path.join(folderPath, filename))
+    else:
+        print("The operating system is not recognized.")
+    
+
+def deleteTrashFiles(folderPath):
     #remove all files with the extension of .THM or .LRV
     deleteFileByExtension(folderPath, ".THM")
     deleteFileByExtension(folderPath, ".LRV")
+    deleteTinyFileByExtension(folderPath, ".MP4", 1)
+    deleteInvisibleFile(folderPath)
 
 # ==================== Functions to rename the file ====================
 def checkFilenameType(filenameWithoutExtension):
@@ -486,17 +518,23 @@ def getFormattedNameV4(filePath, destinationFolderPath = None, overrideCameraID 
 
     # check if the potential formatted filename has a file with the same name in the destination folder
     while os.path.isfile(os.path.join(destinationFolderPath, potentialFormattedFilename)):
-        # if there is a file with the same name, increase the unique ID by 1
-        uniqueID = uniqueID + 1
-        # get a new potential formatted filename
-        # if the unique ID is an integer larger than 1, add the unique ID to the filename
-        if uniqueID > 1 and uniqueID % 1 == 0 and uniqueID < 100:
-            potentialFormattedFilename = capturedDate + "_" + capturedTime + "_" + cameraID \
-                + "_" + str(uniqueID).zfill(2) + "-" + originalFilenameWithoutExtension + fileExtension
-        else:
+        # check if the file in the destination folder is the same with the file in the source folder
+        if os.path.samefile(filePath, os.path.join(destinationFolderPath, potentialFormattedFilename)):
             if DEBUG:
-                print("The unique ID is not an integer larger than 1 and smaller than 100.")
+                print("The file is the same with the file in the destination folder.")
             return None
+        else:
+            # if there is a file with the same name, increase the unique ID by 1
+            uniqueID = uniqueID + 1
+            # get a new potential formatted filename
+            # if the unique ID is an integer larger than 1, add the unique ID to the filename
+            if uniqueID > 1 and uniqueID % 1 == 0 and uniqueID < 100:
+                potentialFormattedFilename = capturedDate + "_" + capturedTime + "_" + cameraID \
+                    + "_" + str(uniqueID).zfill(2) + "-" + originalFilenameWithoutExtension + fileExtension
+            else:
+                if DEBUG:
+                    print("The unique ID is not an integer larger than 1 and smaller than 100.")
+                return None
     return potentialFormattedFilename
 
 
@@ -636,7 +674,13 @@ def renameMediaFilesInFolder(sourceFolder, destinationFolder = None, overrideCam
     filePathList = getFilePathList(sourceFolder)
     # rename the files
     for filePath in filePathList:
-        newFilename = getFormattedNameV4(filePath, destinationFolder, overrideCameraID, defaultCameraID)
+        newFilename = None
+        try:
+            newFilename = getFormattedNameV4(filePath, destinationFolder, overrideCameraID, defaultCameraID)
+        except Exception as e:
+            if DEBUG:
+                print("Error: " + e)
+            continue
         if newFilename is not None:
             renameFile(filePath, newFilename, destinationFolder)
             

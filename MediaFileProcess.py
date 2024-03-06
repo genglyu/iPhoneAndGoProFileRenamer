@@ -61,9 +61,9 @@ if args.recover_original_filenames:
           + sourceFolder + "\n to: \n" + destinationFolder)
     restoreOriginalFilenamesInFolder(sourceFolder, destinationFolder)
 elif args.process:
-    deleteGoproTrashFiles(sourceFolder)
+    deleteTrashFiles(sourceFolder)
     # rename the video file name to the formatted name in the folder
-    print("Start rename the video filename to the formatted name from: \n" 
+    print("Start renaming the video filename to the formatted name from: \n" 
           + sourceFolder + "\n to: \n" + destinationFolder)
     renameMediaFilesInFolder(sourceFolder, 
                              destinationFolder, 
