@@ -175,45 +175,66 @@ def getModifiedDateAndTime(filePath):
 def getVideoCapturedDateAndTime(filePath):
     '''Get the date and time when the video was created. 
     Return two strings in the format of YYYYMMDD, HHMMSSTT'''
-    
-    videoDurationBySeconds = None
-    # get video duration by seconds
-    if isFFmpegInstalled:
-        # get the duration of the video in seconds through ffmpeg
-        result = subprocess.run(['ffprobe', 
-                                '-v', 
-                                'error', 
-                                '-show_entries', 
-                                'format=duration', 
-                                '-of', 
-                                'default=noprint_wrappers=1:nokey=1', 
-                                filePath], 
-                                stdout=subprocess.PIPE, 
-                                stderr=subprocess.STDOUT)
-        videoDurationBySeconds = float(result.stdout)
-    elif isMoviepyInstalled:
-        # use moviepy to get the video duration, not very efficient
-        videoDurationBySeconds = VideoFileClip(filePath).duration
-    else:
-        print("Error: ffmpeg and moviepy are not installed, so modified time is used instead of capture starting time.")
-        videoDurationBySeconds = 0.0
-
-    # get the modified time of the file in seconds since the epoch
-    fileModifiedTimeBySeconds = os.path.getmtime(filePath)
-    # get the captured time of the video in seconds since the epoch
-    videoCapturedTimeBySeconds = fileModifiedTimeBySeconds - videoDurationBySeconds
-    videoCapturedTimeBySecondsDecimalPart = videoCapturedTimeBySeconds % 1
-    # convert the captured time to a datetime object
-    videoCapturedDateTime = datetime.datetime.fromtimestamp(videoCapturedTimeBySeconds)
+    # get the date and time when the video was created from the systme file information
+    fileCreationTimeBySeconds = os.path.getctime(filePath)
+    # convert the creation time to a datetime object
+    fileCreationDateTime = datetime.datetime.fromtimestamp(fileCreationTimeBySeconds)
     # extract the date in the format of YYYYMMDD
-    extractedDate = videoCapturedDateTime.strftime("%Y%m%d")
-    # extract the time in the format of HHMMSSTT, in 24-hour format
-    extractedTime = videoCapturedDateTime.strftime("%H%M%S") + format(videoCapturedTimeBySecondsDecimalPart, ".6f")[2:4]
+    extractedDate = fileCreationDateTime.strftime("%Y%m%d")
+    # extract the time in the format of HHMMSSTT
+    extractedTime = fileCreationDateTime.strftime("%H%M%S")
+    timeLessThanOneSecond = fileCreationTimeBySeconds % 1
+    extractedTime = extractedTime + format(timeLessThanOneSecond, ".6f")[2:4]
     if DEBUG:
         print("File name is: " + filePath)
         print("The captured date of the video is: " + extractedTime)
         print("The captured time of the video is: " + extractedDate)
     return extractedDate, extractedTime
+
+
+# def getVideoCapturedDateAndTime_FromModificatingTime(filePath):
+#     '''Get the date and time when the video was created. 
+#     Return two strings in the format of YYYYMMDD, HHMMSSTT'''
+    
+#     videoDurationBySeconds = None
+#     # get video duration by seconds
+#     if isFFmpegInstalled:
+#         # get the duration of the video in seconds through ffmpeg
+#         result = subprocess.run(['ffprobe', 
+#                                 '-v', 
+#                                 'error', 
+#                                 '-show_entries', 
+#                                 'format=duration', 
+#                                 '-of', 
+#                                 'default=noprint_wrappers=1:nokey=1', 
+#                                 filePath], 
+#                                 stdout=subprocess.PIPE, 
+#                                 stderr=subprocess.STDOUT)
+#         videoDurationBySeconds = float(result.stdout)
+#     elif isMoviepyInstalled:
+#         # use moviepy to get the video duration, not very efficient
+#         videoDurationBySeconds = VideoFileClip(filePath).duration
+#     else:
+#         print("Error: ffmpeg and moviepy are not installed, so modified time is used instead of capture starting time.")
+#         videoDurationBySeconds = 0.0
+
+#     # get the modified time of the file in seconds since the epoch
+#     fileModifiedTimeBySeconds = os.path.getmtime(filePath)
+#     # get the captured time of the video in seconds since the epoch
+#     videoCapturedTimeBySeconds = fileModifiedTimeBySeconds - videoDurationBySeconds
+#     videoCapturedTimeBySecondsDecimalPart = videoCapturedTimeBySeconds % 1
+#     # convert the captured time to a datetime object
+#     videoCapturedDateTime = datetime.datetime.fromtimestamp(videoCapturedTimeBySeconds)
+#     # extract the date in the format of YYYYMMDD
+#     extractedDate = videoCapturedDateTime.strftime("%Y%m%d")
+#     # extract the time in the format of HHMMSSTT, in 24-hour format
+#     extractedTime = videoCapturedDateTime.strftime("%H%M%S") + format(videoCapturedTimeBySecondsDecimalPart, ".6f")[2:4]
+#     if DEBUG:
+#         print("File name is: " + filePath)
+#         print("The captured date of the video is: " + extractedTime)
+#         print("The captured time of the video is: " + extractedDate)
+#     return extractedDate, extractedTime
+
 
 
 def getFileMetadata(filePath):
