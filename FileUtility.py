@@ -172,10 +172,13 @@ def getModifiedDateAndTime(filePath):
         print("The modified date of the file is: " + extractedTime)
     return extractedDate, extractedTime
 
-def getVideoCapturedDateAndTime(filePath):
-    '''Get the date and time when the video was created. 
+def getCreationDateAndTime(filePath):
+    '''Get the created date and time of the file. 
     Return two strings in the format of YYYYMMDD, HHMMSSTT'''
-    # get the date and time when the video was created from the systme file information
+    # createdDate is the date of the file in the format of YYYYMMDD
+    # createdTime is the time of the file in the format of HHMMSS
+
+    # get the creation time of the file in seconds since the epoch
     fileCreationTimeBySeconds = os.path.getctime(filePath)
     # convert the creation time to a datetime object
     fileCreationDateTime = datetime.datetime.fromtimestamp(fileCreationTimeBySeconds)
@@ -185,11 +188,17 @@ def getVideoCapturedDateAndTime(filePath):
     extractedTime = fileCreationDateTime.strftime("%H%M%S")
     timeLessThanOneSecond = fileCreationTimeBySeconds % 1
     extractedTime = extractedTime + format(timeLessThanOneSecond, ".6f")[2:4]
+
     if DEBUG:
         print("File name is: " + filePath)
-        print("The captured date of the video is: " + extractedTime)
-        print("The captured time of the video is: " + extractedDate)
+        print("The created time of the file is: " + extractedDate)
+        print("The created date of the file is: " + extractedTime)
     return extractedDate, extractedTime
+
+def getVideoCapturedDateAndTime(filePath):
+    '''Get the date and time when the video was created. 
+    Return two strings in the format of YYYYMMDD, HHMMSSTT'''
+    return getCreationDateAndTime(filePath)
 
 
 # def getVideoCapturedDateAndTime_FromModificatingTime(filePath):
@@ -234,7 +243,6 @@ def getVideoCapturedDateAndTime(filePath):
 #         print("The captured date of the video is: " + extractedTime)
 #         print("The captured time of the video is: " + extractedDate)
 #     return extractedDate, extractedTime
-
 
 
 def getFileMetadata(filePath):
@@ -495,7 +503,7 @@ def getFormattedNameV4(filePath, destinationFolderPath = None, overrideCameraID 
     if isVideoFile(filePath):
         capturedDate, capturedTime = getVideoCapturedDateAndTime(filePath)
     elif isImageFile(filePath):
-        capturedDate, capturedTime = getModifiedDateAndTime(filePath)
+        capturedDate, capturedTime = getCreationDateAndTime(filePath)
     else:
         if DEBUG:
             print("The file is not a video or image file.")
