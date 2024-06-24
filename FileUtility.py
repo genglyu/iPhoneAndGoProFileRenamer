@@ -137,6 +137,9 @@ FilenamePattern = {
     FilenameType.V3FromGoproMediaLib: r'^([0-9]{4})(0[1-9]|1[0-2])([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])([0-5][0-9])([0-5][0-9])([0-9]{2})_([a-zA-Z0-9]+)(_[0-9]{2})?_([^\)]*)_$'
 }
 
+# time stamp pattern, YYYY-MM-DD_HH-MM-SS-TT. year, month, day, hour, minute, second, time less than one second.
+timeStampPattern = r'^([0-9]{4})-(0[1-9]|1[0-2])-([0-2][0-9]|3[0-1])_([0-1][0-9]|2[0-3])-([0-5][0-9])-([0-5][0-9])-([0-9]{2})$'
+
 def validateString(pattern, testString):
     result = re.match(pattern, testString)
     return result is not None
@@ -179,14 +182,14 @@ def getCreationDateAndTime(filePath):
     # createdTime is the time of the file in the format of HHMMSS
 
     # get the creation time of the file in seconds since the epoch
-    fileCreationTimeBySeconds = os.path.getctime(filePath)
+    fileModificationTimeBySeconds = os.path.getctime(filePath)
     # convert the creation time to a datetime object
-    fileCreationDateTime = datetime.datetime.fromtimestamp(fileCreationTimeBySeconds)
+    fileCreationDateTime = datetime.datetime.fromtimestamp(fileModificationTimeBySeconds)
     # extract the date in the format of YYYYMMDD
     extractedDate = fileCreationDateTime.strftime("%Y%m%d")
     # extract the time in the format of HHMMSSTT
     extractedTime = fileCreationDateTime.strftime("%H%M%S")
-    timeLessThanOneSecond = fileCreationTimeBySeconds % 1
+    timeLessThanOneSecond = fileModificationTimeBySeconds % 1
     extractedTime = extractedTime + format(timeLessThanOneSecond, ".6f")[2:4]
 
     if DEBUG:
@@ -195,10 +198,32 @@ def getCreationDateAndTime(filePath):
         print("The created date of the file is: " + extractedTime)
     return extractedDate, extractedTime
 
-def getVideoCapturedDateAndTime(filePath):
+def getModifiedDateTime(filePath):
+    '''Get the modified date and time of the file. 
+    Return a datetime object'''
+    # get the modified time of the file in seconds since the epoch
+    fileModifiedTimeBySeconds = os.path.getmtime(filePath)
+    # convert the modified time to a datetime object
+    fileModifiedDateTime = datetime.datetime.fromtimestamp(fileModifiedTimeBySeconds)
+    # extract the date in the format of YYYYMMDD
+    extractedDate = fileModifiedDateTime.strftime("%Y%m%d")
+    # extract the time in the format of HHMMSSTT
+    extractedTime = fileModifiedDateTime.strftime("%H%M%S")
+    timeLessThanOneSecond = fileModifiedTimeBySeconds % 1
+    extractedTime = extractedTime + format(timeLessThanOneSecond, ".6f")[2:4]
+    
+    if DEBUG:
+        print("File name is: " + filePath)
+        print("The modified date and time of the file is: " + extractedDate + "_" + extractedTime)
+    return fileModifiedDateTime
+
+def getVideoCapturedDateAndTime(filePath, isUseModifiedTime = False):
     '''Get the date and time when the video was created. 
     Return two strings in the format of YYYYMMDD, HHMMSSTT'''
-    return getCreationDateAndTime(filePath)
+    if isUseModifiedTime:
+        return getModifiedDateAndTime(filePath)
+    else: 
+        return getCreationDateAndTime(filePath)
 
 
 # def getVideoCapturedDateAndTime_FromModificatingTime(filePath):
@@ -430,6 +455,37 @@ def getFilePathListByFileExtension(folderPath, fileExtension, isCaseSensitive = 
                 filePathList.append(os.path.join(folderPath, filename))
     return filePathList
 
+def chageFileModificationDateAndTime(filePath, timeOffseInSeconds = 0):
+    '''Change the modification date and time of the file. Mac OS does not support this.'''
+    # get the modification time of the file in seconds
+    fileModificationTimeBySeconds = os.path.getmtime(filePath)
+    # add the time offset to the modification time
+    fileModificationTimeBySeconds += timeOffseInSeconds
+    # change the modification time of the file
+    os.utime(filePath, (fileModificationTimeBySeconds, fileModificationTimeBySeconds))
+
+
+def changeFileCreationTimeInFolder(folderPath, sourceTimeStamp, destinationTimeStamp):
+    '''Change the creation date and time of the files in the folder.'''
+    # check if the sourceTimeStamp and destinationTimeStamp are in the correct format
+    if not validateString(timeStampPattern, sourceTimeStamp):
+        print("The source time stamp is not in the correct format.")
+        return
+    if not validateString(timeStampPattern, destinationTimeStamp):
+        print("The destination time stamp is not in the correct format.")
+        return
+    # get the time offset in seconds
+    sourceTime = datetime.datetime.strptime(sourceTimeStamp, "%Y-%m-%d_%H-%M-%S-%f")
+    destinationTime = datetime.datetime.strptime(destinationTimeStamp, "%Y-%m-%d_%H-%M-%S-%f")
+
+    timeOffsetInSeconds = (destinationTime - sourceTime).total_seconds()
+    # get the file path list in the folder
+    filePathList = getFilePathList(folderPath)
+    # change the creation time of the files in the folder
+    for filePath in filePathList:
+        chageFileModificationDateAndTime(filePath, timeOffsetInSeconds)
+
+    
 def deleteFileByExtension(folderPath, fileExtension):
     # Delete all files in the folder with the specified file extension.
     fileNameList = getFilenameListByFileExtension(folderPath, fileExtension)
@@ -486,7 +542,7 @@ def checkFilenameType(filenameWithoutExtension):
                 return filenameType
     return FilenameType.Unknown
 
-def getFormattedNameV4(filePath, destinationFolderPath = None, overrideCameraID = None, defaultCameraID = "Cid"):
+def getFormattedNameV4(filePath, destinationFolderPath = None, overrideCameraID = None, defaultCameraID = "Cid", isUseModifiedTime = False):
     '''Rename the file to the formatted name in the format of YYYYMMDD_HHMMSSTT_IIIII(?:_NN)-OriginalFilename'''
     # get the file information
     filename = os.path.basename(filePath)
@@ -501,7 +557,7 @@ def getFormattedNameV4(filePath, destinationFolderPath = None, overrideCameraID 
 
     # get the captured date and time
     if isVideoFile(filePath):
-        capturedDate, capturedTime = getVideoCapturedDateAndTime(filePath)
+        capturedDate, capturedTime = getVideoCapturedDateAndTime(filePath, isUseModifiedTime)
     elif isImageFile(filePath):
         capturedDate, capturedTime = getCreationDateAndTime(filePath)
     else:
@@ -696,7 +752,7 @@ def renameFile(filePath, newFilename, destinationFolderPath = None):
             print("Error: " + e)
         return False
 
-def renameMediaFilesInFolder(sourceFolder, destinationFolder = None, overrideCameraID = None, defaultCameraID = "Cid"):
+def renameMediaFilesInFolder(sourceFolder, destinationFolder = None, overrideCameraID = None, defaultCameraID = "Cid", isUseModifiedTime = False):
     '''Process all the files in the folder'''
     destinationFolder = sourceFolder if destinationFolder is None else destinationFolder
     # get the file path list
@@ -705,7 +761,7 @@ def renameMediaFilesInFolder(sourceFolder, destinationFolder = None, overrideCam
     for filePath in filePathList:
         newFilename = None
         try:
-            newFilename = getFormattedNameV4(filePath, destinationFolder, overrideCameraID, defaultCameraID)
+            newFilename = getFormattedNameV4(filePath, destinationFolder, overrideCameraID, defaultCameraID, isUseModifiedTime)
         except Exception as e:
             if DEBUG:
                 print("Error: " + e)
